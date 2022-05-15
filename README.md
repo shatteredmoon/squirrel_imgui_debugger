@@ -13,13 +13,13 @@ For remote debugging, your program must additionally include support for [NetImg
 Initial release
 
 ## Getting started
-###Build the library or embed the source
+### Build the library or embed the source
 There are two methods for using the debugger:
 
 1. Open the provided solution and build the library for either release or debug. Link to the generated .lib file in your program.
 2. Copy the source code in the `src` folder to your project and include the source.
 
-###Include headers
+### Include headers
 There are two major components to the debugger that you'll need to access: the VM manager and the debugger interface. Simply include these headers:
 
 ```
@@ -27,22 +27,22 @@ There are two major components to the debugger that you'll need to access: the V
 #include <d_vm.h>
 ```
 
-###Link to the library
+### Link to the library
 squirrel_imgui_debugger.lib
 
-###Attach your VM(s)
+### Attach your VM(s)
 Attaching a squirrel VM is as simple as adding the following line of code anywhere in your program:
 
 `rumDebugVM::AttachVM( mySquirrelVM );`
 
 However, you'll probably want to design your program to attach programmatically based on a menu selection, keypress, or console command.
 
-###Detach your VM(s)
+### Detach your VM(s)
 Similarly, you can detach a VM with this line of code:
 
 `rumDebugVM::DetachVM( mySquirrelVM );`
 
-###Create an interface thread
+### Create an interface thread
 You'll need to create a thread for the ImGui interface to run on separately from your main program thread. Here's some example code to get you started:
 
 ```
@@ -75,7 +75,7 @@ void ScriptDebuggerThread( const std::string& strPath, const bool& shutdownReque
 
 Somewhere in your code, possibly during initialization, you'll need to call the `ConnectScriptDebugger` function so that the debugger thread is created. Again, however, you may want to consider designing your program so that the debugger thread is only executing when debugging is enabled.
 
-###Shutdown
+### Shutdown
 Don't forget to join your debugger thread:
 
 ```
@@ -85,10 +85,10 @@ if( myDebuggerThread.joinable() )
 }
 ```
 
-###Configure settings
+### Configure settings
 You can modify `d_settings.h` to change a few simple things such as the display resolution, how many lines variable previews will show, and the maximum length of filenames.
 
-###Using the debugger
+## Using the debugger
 Once your VM is attached, ImGui should render a debugging environment similar to Visual Studio.
 
 Available files are listed in a panel at the top left. Folders can be expanded and collapsed and a filter input is provided for quickly finding a file by name. A single click on any file will open the file in the code panel to the right.
@@ -113,7 +113,7 @@ While paused at a breakpoint, you can:
 3. Step over a function by pressing F11
 4. Step out of a function by pressing Shift+F11
 
-###Debugger persistence
+## Debugger persistence
 While using the debugger, breakpoint changes, opened files, and watched variables are all saved to the imgui.ini in the `[UserData][Script Debugger]` section.
 
 Example:
