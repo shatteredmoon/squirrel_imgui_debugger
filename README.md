@@ -1,3 +1,5 @@
+![Debugger](https://repository-images.githubusercontent.com/492556883/82e69014-add9-44e8-aaed-44ecc3d8af6f)
+
 # Squirrel ImGui Debugger
 
 A simple interface for debugging Squirrel programming language scripts without the need for an additional IDE such as Visual Studio, Visual Studio, or Eclipse.
