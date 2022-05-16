@@ -2,7 +2,7 @@
 
 # Squirrel ImGui Debugger
 
-A simple interface for debugging Squirrel programming language scripts without the need for an additional IDE such as Visual Studio, Visual Studio, or Eclipse.
+A simple interface for debugging Squirrel programming language scripts without the need for an additional IDE such as Visual Studio, VS Code, or Eclipse.
 
 ## Requirements
 
