@@ -2,7 +2,30 @@
 
 # Squirrel ImGui Debugger
 
-A simple interface for debugging Squirrel programming language scripts without the need for an additional IDE such as Visual Studio, Visual Studio, or Eclipse.
+A simple interface for debugging Squirrel programming language scripts without the need for an additional IDE such as Visual Studio, VS Code, or Eclipse.
+
+## What it can do
+
+* File browser with filtering
+* Tabbed files
+* Syntax highlighting
+* Skip to file line
+* Enable/disable breakpoints
+* Symbol inspection with mouse hover
+* Watched variable inspection
+* Local variable inspection
+* Resume, step into, step over, and step out of program flow
+* Callstack info
+* Persistent environment
+* Debug Squirrel VMs simultaneously with your native code
+
+## What it can't do
+
+* Code editing
+* Dynamic expression evaluation
+* Collapse and expand regions of code
+* Dynamically modify variable data
+* Run to cursor
 
 ## Requirements
 
