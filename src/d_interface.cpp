@@ -1283,7 +1283,7 @@ void rumDebugInterface::UpdateWatchTab()
       ImGui::SameLine();
 
       auto pcContext{ rumDebugVM::GetCurrentDebugContext() };
-      if( pcContext->m_bPaused )
+      if( pcContext && pcContext->m_bPaused )
       {
         ImGui::PushItemWidth( ImGui::GetColumnWidth() );
 
