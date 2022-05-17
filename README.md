@@ -6,26 +6,26 @@ A simple interface for debugging Squirrel programming language scripts without t
 
 ## What it can do
 
-File browser with filtering
-Tabbed files
-Syntax highlighting
-Skip to file line
-Enable/disable breakpoints
-Symbol inspection with mouse hover
-Watched variable inspection
-Local variable inspection
-Resume, step into, step over, and step out of program flow
-Callstack info
-Persistent environment
-Debug Squirrel VMs simultaneously with your native code
+* File browser with filtering
+* Tabbed files
+* Syntax highlighting
+* Skip to file line
+* Enable/disable breakpoints
+* Symbol inspection with mouse hover
+* Watched variable inspection
+* Local variable inspection
+* Resume, step into, step over, and step out of program flow
+* Callstack info
+* Persistent environment
+* Debug Squirrel VMs simultaneously with your native code
 
 ## What it can't do
 
-Code editing
-Dynamic expression evaluation
-Collapse and expand regions of code
-Dynamically modify variable data
-Run to cursor
+* Code editing
+* Dynamic expression evaluation
+* Collapse and expand regions of code
+* Dynamically modify variable data
+* Run to cursor
 
 ## Requirements
 
