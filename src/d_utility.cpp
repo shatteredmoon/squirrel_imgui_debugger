@@ -36,7 +36,7 @@ SOFTWARE.
 
 namespace rumDebugUtility
 {
-  std::string BuildInstanceDescription( HSQUIRRELVM i_pVM )
+  std::string BuildInstanceDescription( HSQUIRRELVM i_pVM, bool i_bValuesAsHex )
   {
 #if DEBUG_OUTPUT
     SQInteger iTopBegin{ sq_gettop( i_pVM ) };
@@ -100,14 +100,14 @@ namespace rumDebugUtility
         sq_pushobject( i_pVM, sqInstance );
         sq_pushstring( i_pVM, sq_objtostring( &sqKey ), -1 );
 
-        strDesc += FormatVariable( i_pVM, -1 );
+        strDesc += FormatVariable( i_pVM, -1, i_bValuesAsHex );
 
         // Get the object from the table
         HSQOBJECT slotObj;
         sq_get( i_pVM, -2 );
         sq_getstackobj( i_pVM, -1, &slotObj );
 
-        std::string strValue{ FormatVariable( i_pVM, -1 ) };
+        std::string strValue{ FormatVariable( i_pVM, -1, i_bValuesAsHex ) };
 
         // Pop the fetched object
         sq_poptop( i_pVM );
@@ -132,7 +132,7 @@ namespace rumDebugUtility
   }
 
 
-  std::string BuildTableDescription( HSQUIRRELVM i_pVM )
+  std::string BuildTableDescription( HSQUIRRELVM i_pVM, bool i_bValuesAsHex )
   {
     std::string strDesc;
 
@@ -163,7 +163,7 @@ namespace rumDebugUtility
            ++i )
       {
         sq_poptop( i_pVM );
-        vTableEntries.emplace_back( TableEntry{ FormatVariable( i_pVM, -1 ), iIndex } );
+        vTableEntries.emplace_back( TableEntry{ FormatVariable( i_pVM, -1, i_bValuesAsHex ), iIndex } );
         sq_poptop( i_pVM );
       }
 
@@ -185,7 +185,7 @@ namespace rumDebugUtility
           break;
         }
 
-        const auto strValue{ FormatVariable( i_pVM, -1 ) };
+        const auto strValue{ FormatVariable( i_pVM, -1, i_bValuesAsHex ) };
         if( strValue.empty() )
         {
           sq_pop( i_pVM, 2 );
@@ -198,7 +198,7 @@ namespace rumDebugUtility
           }
 
           sq_poptop( i_pVM );
-          strDesc += FormatVariable( i_pVM, -1 ) + ": " + strValue;
+          strDesc += FormatVariable( i_pVM, -1, i_bValuesAsHex ) + ": " + strValue;
           sq_poptop( i_pVM );
         }
 
@@ -282,6 +282,22 @@ namespace rumDebugUtility
       {
         sq_getstackobj( i_pVM, -1, &sqObject );
       }
+      else
+      {
+        // Fetch the const table
+        sq_pushconsttable( i_pVM );
+        sq_getstackobj( i_pVM, -1, &sqObject );
+        sq_pop( i_pVM, 1 );
+
+        // Push the const table and desired string
+        sq_pushobject( i_pVM, sqObject );
+        sq_pushstring( i_pVM, _SC( i_strVariable.c_str() ), -1 );
+
+        // Fetch the result
+        sq_get( i_pVM, -2 );
+        sq_getstackobj( i_pVM, -1, &sqObject );
+        sq_pop( i_pVM, 2 );
+      }
     }
 
     sq_settop( i_pVM, iTop );
@@ -290,7 +306,7 @@ namespace rumDebugUtility
   }
 
 
-  std::string FormatVariable( HSQUIRRELVM i_pVM, const SQInteger i_iIndex )
+  std::string FormatVariable( HSQUIRRELVM i_pVM, const SQInteger i_iIndex, bool i_bValuesAsHex )
   {
     std::string strVariable;
 
@@ -312,11 +328,11 @@ namespace rumDebugUtility
       case OT_ARRAY:
       case OT_CLASS:
       case OT_TABLE:
-        strVariable = BuildTableDescription( i_pVM );
+        strVariable = BuildTableDescription( i_pVM, i_bValuesAsHex );
         break;
 
       case OT_INSTANCE:
-        strVariable = BuildInstanceDescription( i_pVM );
+        strVariable = BuildInstanceDescription( i_pVM, i_bValuesAsHex );
         break;
 
       case OT_CLOSURE:
@@ -356,7 +372,33 @@ namespace rumDebugUtility
       {
         SQInteger i;
         sq_getinteger( i_pVM, i_iIndex, &i );
-        strVariable = std::to_string( i );
+        if( i_bValuesAsHex )
+        {
+          static char strHighBuffer[20] = { '0', 'x', '\0' };
+          static char strLowBuffer[20] = { '\0' };
+
+#if _WIN64 || __x86_64__ || __ppc64__
+          if( sizeof( SQInteger ) == sizeof( int32_t ) && ( i >> 32 ) > 0 )
+          {
+            _itoa_s( static_cast<int32_t>( i >> 32 ), &strHighBuffer[2], 16, 18 );
+            strVariable = strHighBuffer;
+            strVariable += _itoa_s( static_cast<int32_t>(i & 0xFFFFFFFF), &strLowBuffer[0], 16, 20 );
+          }
+          else
+          {
+            _itoa_s( static_cast<int32_t>( i & 0xFFFFFFFF ), &strHighBuffer[2], 16, 20 );
+            strVariable = strHighBuffer;
+          }
+#else
+          _itoa_s( static_cast<int32_t>( i & 0xFFFFFFFF ), &strHighBuffer[2], 16, 20 );
+          strVariable = strHighBuffer;
+
+#endif
+        }
+        else
+        {
+          strVariable = std::to_string( i );
+        }
         break;
       }
 
@@ -386,14 +428,14 @@ namespace rumDebugUtility
   }
 
 
-  std::string FormatVariable( HSQUIRRELVM i_pVM, HSQOBJECT i_sqObject )
+  std::string FormatVariable( HSQUIRRELVM i_pVM, HSQOBJECT i_sqObject, bool i_bValuesAsHex )
   {
 #if DEBUG_OUTPUT
     SQInteger iTopBegin{ sq_gettop( i_pVM ) };
 #endif
 
     sq_pushobject( i_pVM, i_sqObject );
-    std::string strVariable{ FormatVariable( i_pVM, -1 ) };
+    std::string strVariable{ FormatVariable( i_pVM, -1, i_bValuesAsHex ) };
     sq_poptop( i_pVM );
 
 #if DEBUG_OUTPUT

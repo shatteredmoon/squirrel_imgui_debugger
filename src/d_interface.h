@@ -24,6 +24,11 @@ public:
   static void RequestSettingsUpdate();
   static void SetFileFocus( const std::filesystem::path& s_fsFocusFile, int32_t s_iFocusLine );
 
+  static bool WantsValuesAsHex()
+  {
+    return s_bShowHex;
+  }
+
 private:
 
   static void DisplayCode( const std::string& i_strSource, uint32_t i_uiLine,
@@ -60,6 +65,7 @@ private:
   static void UpdateSourceCode();
   static void UpdateStackBreakpointWindow();
   static void UpdateStackTab();
+  static void UpdateVMsTab();
   static void UpdateWatchLocalWindow();
   static void UpdateWatchTab();
 
@@ -75,10 +81,14 @@ private:
   // Lock guard
   static std::mutex s_mtxLockGuard;
 
-  static bool s_bUpdateSettings;
-
   // Breakpoint colors
   using ImU32 = unsigned int;
   static ImU32 s_uiEnabledBreakpointColor;
   static ImU32 s_uiDisabledBreakpointColor;
+
+  // Should settings be saved to .ini?
+  static bool s_bUpdateSettings;
+
+  // Show integer values as hex
+  static bool s_bShowHex;
 };

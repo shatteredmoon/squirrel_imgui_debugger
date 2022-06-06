@@ -45,10 +45,10 @@ std::string rumDebugInterface::s_strScriptPath;
 std::filesystem::path rumDebugInterface::s_fsFocusFile;
 int32_t rumDebugInterface::s_iFocusLine{ -1 };
 std::mutex rumDebugInterface::s_mtxLockGuard;
-bool rumDebugInterface::s_bUpdateSettings;
-
 ImU32 rumDebugInterface::s_uiEnabledBreakpointColor{ 0 };
 ImU32 rumDebugInterface::s_uiDisabledBreakpointColor{ 0 };
+bool rumDebugInterface::s_bUpdateSettings{ false };
+bool rumDebugInterface::s_bShowHex{ false };
 
 
 // static
@@ -219,7 +219,7 @@ void rumDebugInterface::DisplayCode( const std::string& i_strSource, uint32_t i_
       ImGui::BeginGroup();
       ImGui::TextUnformatted( token.c_str() );
 
-      if( pcContext->m_bPaused )
+      if( pcContext && pcContext->m_bPaused )
       {
         if( ImGui::IsItemHovered() )
         {
@@ -334,11 +334,11 @@ void rumDebugInterface::Init( const std::string& i_strName, uint32_t i_iPort, co
   cContext->SettingsHandlers.push_back( ini_handler );
 
   // Add support for function keys
-  io.KeyMap[ImGuiKey_G] = static_cast<int>( CmdInput::eVirtualKeys::vkKeyboardA ) + ( ImGuiKey_G - ImGuiKey_A );
-  io.KeyMap[ImGuiKey_F5] = static_cast<int>( CmdInput::eVirtualKeys::vkKeyboardSuperF1 ) + ( ImGuiKey_F5 - ImGuiKey_F1 );
-  io.KeyMap[ImGuiKey_F9] = static_cast<int>( CmdInput::eVirtualKeys::vkKeyboardSuperF1 ) + ( ImGuiKey_F9 - ImGuiKey_F1 );
-  io.KeyMap[ImGuiKey_F10] = static_cast<int>( CmdInput::eVirtualKeys::vkKeyboardSuperF1 ) + ( ImGuiKey_F10 - ImGuiKey_F1 );
-  io.KeyMap[ImGuiKey_F11] = static_cast<int>( CmdInput::eVirtualKeys::vkKeyboardSuperF1 ) + ( ImGuiKey_F11 - ImGuiKey_F1 );
+  io.KeyMap[ImGuiKey_G] = static_cast<int32_t>( CmdInput::eVirtualKeys::vkKeyboardA ) + ( ImGuiKey_G - ImGuiKey_A );
+  io.KeyMap[ImGuiKey_F5] = static_cast<int32_t>( CmdInput::eVirtualKeys::vkKeyboardSuperF1 ) + ( ImGuiKey_F5 - ImGuiKey_F1 );
+  io.KeyMap[ImGuiKey_F9] = static_cast<int32_t>( CmdInput::eVirtualKeys::vkKeyboardSuperF1 ) + ( ImGuiKey_F9 - ImGuiKey_F1 );
+  io.KeyMap[ImGuiKey_F10] = static_cast<int32_t>( CmdInput::eVirtualKeys::vkKeyboardSuperF1 ) + ( ImGuiKey_F10 - ImGuiKey_F1 );
+  io.KeyMap[ImGuiKey_F11] = static_cast<int32_t>( CmdInput::eVirtualKeys::vkKeyboardSuperF1 ) + ( ImGuiKey_F11 - ImGuiKey_F1 );
 
   io.DisplaySize.x = static_cast<float>( DEBUGGER_DISPLAY_WIDTH );
   io.DisplaySize.y = static_cast<float>( DEBUGGER_DISPLAY_HEIGHT );
@@ -1094,6 +1094,7 @@ void rumDebugInterface::UpdateStackBreakpointWindow()
   {
     UpdateStackTab();
     UpdateBreakpointTab();
+    UpdateVMsTab();
 
     // StackAndBreakpointsTabBar
     ImGui::EndTabBar();
@@ -1186,13 +1187,29 @@ void rumDebugInterface::UpdateWatchLocalWindow()
   const float fSizeY{ std::max( 0.0f, vRegion.y - 2.0f ) };
   ImGui::BeginChild( "WatchAndLocalsChild", ImVec2( 0.f, fSizeY ), false, ImGuiWindowFlags_HorizontalScrollbar );
 
+  //ImGui::BeginGroup();
   if( ImGui::BeginTabBar( "WatchAndLocalsChildTabBar", ImGuiTabBarFlags_None ) )
   {
     UpdateWatchTab();
     UpdateLocalsTab();
-  
+
+    // #TODO - without this, the Show Hex checkbox shows up in the wrong place
+    if( ImGui::BeginTabItem( "+##StubItem" ) )
+    {
+      // StubItem
+      ImGui::EndTabItem();
+    }
+
     // WatchAndLocalsChildTabBar
     ImGui::EndTabBar();
+  }
+  //ImGui::EndGroup();
+
+  ImGui::SameLine();
+  if( ImGui::Checkbox( "Show Hex", &s_bShowHex ) )
+  {
+    rumDebugVM::RequestVariableUpdates();
+    rumDebugVM::s_cvDebugLock.notify_all();
   }
 
   // WatchAndLocalsChild
@@ -1201,108 +1218,178 @@ void rumDebugInterface::UpdateWatchLocalWindow()
 
 
 // static
+void rumDebugInterface::UpdateVMsTab()
+{
+  if( ImGui::BeginTabItem( "VMs##TabItem" ) )
+  {
+    const ImVec2 vRegion{ ImGui::GetContentRegionAvail() };
+    const float fSizeY{ std::max( 0.0f, vRegion.y - 2.0f ) };
+    ImGui::BeginChild( "VMsTabChild", ImVec2( 0.f, fSizeY ), false, ImGuiWindowFlags_HorizontalScrollbar );
+
+    static constexpr ImGuiTableFlags eTableFlags{ ImGuiTableFlags_Resizable | ImGuiTableFlags_Borders |
+                                                  ImGuiTableFlags_ScrollY | ImGuiTableFlags_ContextMenuInBody |
+                                                  ImGuiTableFlags_NoSavedSettings };
+    if( ImGui::BeginTable( "VMsTable", 2, eTableFlags ) )
+    {
+      const auto& vVMInfo{ rumDebugVM::GetVMInfo() };
+      for( const auto& iter : vVMInfo )
+      {
+        ImGui::TableNextRow();
+
+        // VM Name
+        ImGui::TableNextColumn();
+
+        ImGui::TextUnformatted( iter.m_strName.c_str() );
+
+        // VM State
+        ImGui::TableNextColumn();
+        if( iter.m_bAttached )
+        {
+          if( ImGui::SmallButton( "Detach" ) )
+          {
+            rumDebugVM::RequestDetachVM( iter.m_strName );
+            rumDebugVM::s_cvDebugLock.notify_all();
+          }
+        }
+        else
+        {
+          if( ImGui::SmallButton( "Attach" ) )
+          {
+            rumDebugVM::RequestAttachVM( iter.m_strName );
+            rumDebugVM::s_cvDebugLock.notify_all();
+          }
+        }
+      }
+
+      // VMsTable
+      ImGui::EndTable();
+    }
+
+    // VMsTabChild
+    ImGui::EndChild();
+
+    // VMsTabItem
+    ImGui::EndTabItem();
+  }
+}
+
+
+// static
 void rumDebugInterface::UpdateWatchTab()
 {
+  auto pcContext{ rumDebugVM::GetCurrentDebugContext() };
+  if( !pcContext )
+  {
+    return;
+  }
+
   if( ImGui::BeginTabItem( "Watched##TabItem" ) )
   {
     const ImVec2 vRegion{ ImGui::GetContentRegionAvail() };
     const float fSizeY{ std::max( 0.0f, vRegion.y - 2.0f ) };
     ImGui::BeginChild( "WatchedTabChild", ImVec2( 0.f, fSizeY ), false, ImGuiWindowFlags_HorizontalScrollbar );
 
-    static constexpr ImGuiTableFlags eTableFlags{ ImGuiTableFlags_Resizable | ImGuiTableFlags_Borders |
-                                                  ImGuiTableFlags_ScrollY | ImGuiTableFlags_ContextMenuInBody |
-                                                  ImGuiTableFlags_NoSavedSettings };
-    if( ImGui::BeginTable( "WatchTable", 3, eTableFlags ) )
+    if( pcContext->m_bPaused )
     {
-      static char strCWatchVariable[MAX_FILENAME_LENGTH];
-
-      // Fetch by copy here because there is potential to modify the list during iteration
-      // #TODO - There is a lot of data being copied - work out a threadsafe share
-      const auto cvWatchedVariables{ rumDebugVM::GetWatchedVariablesCopy() };
-      for( const auto& iter : cvWatchedVariables )
+      static constexpr ImGuiTableFlags eTableFlags{ ImGuiTableFlags_Resizable | ImGuiTableFlags_Borders |
+                                                    ImGuiTableFlags_ScrollY | ImGuiTableFlags_ContextMenuInBody |
+                                                    ImGuiTableFlags_NoSavedSettings };
+      if( ImGui::BeginTable( "WatchTable", 3, eTableFlags ) )
       {
+        static char strCWatchVariable[MAX_FILENAME_LENGTH];
+
+        // Fetch by copy here because there is potential to modify the list during iteration
+        // #TODO - There is a lot of data being copied - work out a threadsafe share
+        const auto cvWatchedVariables{ rumDebugVM::GetWatchedVariablesCopy() };
+        for( const auto& iter : cvWatchedVariables )
+        {
+          ImGui::TableNextRow();
+
+          // Watch variable name
+          ImGui::TableNextColumn();
+
+          ImGui::PushItemWidth( ImGui::GetColumnWidth() );
+
+          strncpy_s( strCWatchVariable, iter.m_strName.c_str(), iter.m_strName.length() + 1 );
+          std::string strContentID{ "##" + iter.m_strName };
+          if( ImGui::InputText( strContentID.c_str(), strCWatchVariable, IM_ARRAYSIZE( strCWatchVariable ),
+                                ImGuiInputTextFlags_EnterReturnsTrue ) )
+          {
+            if( rumDebugVM::WatchVariableEdit( iter, strCWatchVariable ) )
+            {
+              rumDebugVM::s_cvDebugLock.notify_all();
+            }
+          }
+
+          ImGui::PopItemWidth();
+
+          ImGui::PushID( strContentID.c_str() );
+          if( ImGui::BeginPopupContextItem() )
+          {
+            if( ImGui::Button( "Delete" ) )
+            {
+              rumDebugVM::WatchVariableRemove( iter );
+              ImGui::CloseCurrentPopup();
+            }
+
+            ImGui::EndPopup();
+          }
+          ImGui::PopID();
+
+          // Watch variable type
+          ImGui::TableNextColumn();
+          ImGui::TextUnformatted( iter.m_strType.c_str() );
+
+          // Watch variable value
+          ImGui::TableNextColumn();
+
+          // Preview the results if there are more than 3 lines
+          const auto szOffset{ FindNthOccurrence( iter.m_strValue, "\n", NUM_VARIABLE_PREVIEW_LINES ) };
+          if( szOffset == std::string::npos )
+          {
+            ImGui::TextUnformatted( iter.m_strValue.c_str() );
+          }
+          else
+          {
+            ImGui::TextUnformatted( iter.m_strValue.substr( 0, szOffset ).c_str() );
+            DoVariableExpansion( iter );
+          }
+        }
+
         ImGui::TableNextRow();
 
-        // Watch variable name
+        static char strCNewWatchVariable[MAX_FILENAME_LENGTH];
+
         ImGui::TableNextColumn();
+        ImGui::TextUnformatted( "+" );
+        ImGui::SameLine();
 
-        ImGui::PushItemWidth( ImGui::GetColumnWidth() );
-
-        strncpy_s( strCWatchVariable, iter.m_strName.c_str(), iter.m_strName.length() + 1 );
-        std::string strContentID{ "##" + iter.m_strName };
-        if( ImGui::InputText( strContentID.c_str(), strCWatchVariable, IM_ARRAYSIZE( strCWatchVariable ),
-                              ImGuiInputTextFlags_EnterReturnsTrue ) )
+        auto pcContext{ rumDebugVM::GetCurrentDebugContext() };
+        if( pcContext && pcContext->m_bPaused )
         {
-          if( rumDebugVM::WatchVariableEdit( iter, strCWatchVariable ) )
-          {
-            rumDebugVM::s_cvDebugLock.notify_all();
-          }
-        }
+          ImGui::PushItemWidth( ImGui::GetColumnWidth() );
 
-        ImGui::PopItemWidth();
-
-        ImGui::PushID( strContentID.c_str() );
-        if( ImGui::BeginPopupContextItem() )
-        {
-          if( ImGui::Button( "Delete" ) )
+          if( ImGui::InputText( "##NewWatchVariable", strCNewWatchVariable, IM_ARRAYSIZE( strCNewWatchVariable ),
+                                ImGuiInputTextFlags_EnterReturnsTrue ) )
           {
-            rumDebugVM::WatchVariableRemove( iter );
-            ImGui::CloseCurrentPopup();
+            if( rumDebugVM::WatchVariableAdd( strCNewWatchVariable ) )
+            {
+              rumDebugVM::s_cvDebugLock.notify_all();
+            }
+
+            memset( strCNewWatchVariable, '\0', sizeof( char ) * MAX_FILENAME_LENGTH );
           }
 
-          ImGui::EndPopup();
+          ImGui::PopItemWidth();
         }
-        ImGui::PopID();
 
-        // Watch variable type
-        ImGui::TableNextColumn();
-        ImGui::TextUnformatted( iter.m_strType.c_str() );
-
-        // Watch variable value
-        ImGui::TableNextColumn();
-
-        // Preview the results if there are more than 3 lines
-        const auto szOffset{ FindNthOccurrence( iter.m_strValue, "\n", NUM_VARIABLE_PREVIEW_LINES ) };
-        if( szOffset == std::string::npos )
-        {
-          ImGui::TextUnformatted( iter.m_strValue.c_str() );
-        }
-        else
-        {
-          ImGui::TextUnformatted( iter.m_strValue.substr( 0, szOffset ).c_str() );
-          DoVariableExpansion( iter );
-        }
+        // WatchTable
+        ImGui::EndTable();
       }
-
-      ImGui::TableNextRow();
-
-      static char strCNewWatchVariable[MAX_FILENAME_LENGTH];
-
-      ImGui::TableNextColumn();
-      ImGui::TextUnformatted( "+" );
-      ImGui::SameLine();
-
-      auto pcContext{ rumDebugVM::GetCurrentDebugContext() };
-      if( pcContext && pcContext->m_bPaused )
-      {
-        ImGui::PushItemWidth( ImGui::GetColumnWidth() );
-
-        if( ImGui::InputText( "##NewWatchVariable", strCNewWatchVariable, IM_ARRAYSIZE( strCNewWatchVariable ),
-                              ImGuiInputTextFlags_EnterReturnsTrue ) )
-        {
-          if( rumDebugVM::WatchVariableAdd( strCNewWatchVariable ) )
-          {
-            rumDebugVM::s_cvDebugLock.notify_all();
-          }
-
-          memset( strCNewWatchVariable, '\0', sizeof( char ) * MAX_FILENAME_LENGTH );
-        }
-
-        ImGui::PopItemWidth();
-      }
-
-      // WatchTable
-      ImGui::EndTable();
+    }
+    else
+    {
+    ImGui::Text( "Running" );
     }
 
     // WatchedTabChild

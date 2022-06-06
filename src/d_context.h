@@ -38,26 +38,26 @@ struct rumDebugContext
   // The last known callstack
   std::vector<CallstackEntry> m_vCallstack;
 
-  // Whether or not the VM is paused
-  bool m_bPaused{ false };
-
-  // The current line the VM is paused at
-  uint32_t m_uiPausedLine{ 0 };
-
   // The current file the VM is paused on
   std::filesystem::path m_fsPausedFile;
 
   // The last issued step directive
   StepDirective m_eStepDirective{ StepDirective::Resume };
 
+  // The current line the VM is paused at
+  uint32_t m_uiPausedLine{ 0 };
+
   // The last known stack level when a step directive was issued
   uint32_t m_uiStepDirectiveStackLevel{ 0 };
 
-  // Has there been a variable request or stack level change?
-  bool m_bUpdateVariables{ false };
+  // Whether or not the VM is paused
+  bool m_bPaused{ false };
 
   // Should the update focus on the paused instruction pointer?
   bool m_bFocusOnCurrentInstruction{ false };
+
+  // Has there been a variable request or stack level change?
+  bool m_bUpdateVariables{ false };
 
 private:
 

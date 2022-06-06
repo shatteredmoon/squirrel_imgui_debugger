@@ -53,6 +53,9 @@ SOFTWARE.
 #define SQ_FUNCTIONRETURN 'r'
 
 std::vector<rumDebugContext> rumDebugVM::s_vDebugContexts;
+std::string rumDebugVM::s_strAttachRequest;
+std::string rumDebugVM::s_strDetachRequest;
+std::map<HSQUIRRELVM, std::string> rumDebugVM::s_mapRegisteredVMs;
 std::vector<rumDebugBreakpoint> rumDebugVM::s_vBreakpoints;
 std::map<std::string, rumDebugFile> rumDebugVM::s_mapOpenedFiles;
 rumDebugContext* rumDebugVM::s_vCurrentDebugContext{ nullptr };
@@ -67,19 +70,34 @@ std::condition_variable rumDebugVM::s_cvDebugLock;
 
 
 // static
-void rumDebugVM::AttachVM( HSQUIRRELVM i_pVM )
+SQInteger rumDebugVM::AttachVM( HSQUIRRELVM i_pVM )
 {
   const auto& iter{ std::find( s_vDebugContexts.begin(), s_vDebugContexts.end(), i_pVM ) };
   if( iter == s_vDebugContexts.end() )
   {
     rumDebugContext cContext( i_pVM );
-
     sq_setnativedebughook( i_pVM, &NativeDebugHook );
-    sq_enabledebuginfo( i_pVM, SQTrue );
-
     s_vDebugContexts.emplace_back( std::move( cContext ) );
+    
+    if( !s_pCurrentVM )
+    {
+      s_pCurrentVM = i_pVM;
+    }
 
-    s_pCurrentVM = i_pVM;
+    return SQ_OK;
+  }
+
+  return SQ_ERROR;
+}
+
+
+// static
+void rumDebugVM::AttachVM( const std::string& i_strName )
+{
+  HSQUIRRELVM pVM{ GetVMByName( i_strName ) };
+  if( pVM )
+  {
+    AttachVM( pVM );
   }
 }
 
@@ -149,7 +167,7 @@ void rumDebugVM::BuildLocalVariables( HSQUIRRELVM i_pVM, int32_t i_StackLevel )
     rumDebugVariable cLocalEntry;
     cLocalEntry.m_strName = strName;
     cLocalEntry.m_strType = rumDebugUtility::GetTypeName( eType );
-    cLocalEntry.m_strValue = rumDebugUtility::FormatVariable( i_pVM, -1 );
+    cLocalEntry.m_strValue = rumDebugUtility::FormatVariable( i_pVM, -1, rumDebugInterface::WantsValuesAsHex() );
 
     s_vLocalVariables.emplace_back( std::move( cLocalEntry ) );
 
@@ -187,20 +205,71 @@ void rumDebugVM::BuildVariables( HSQUIRRELVM i_pVM, std::vector<rumDebugVariable
       }
 
       watchIter.m_strType = rumDebugUtility::GetTypeName( sqObject._type );
-      watchIter.m_strValue = rumDebugUtility::FormatVariable( i_pVM, sqObject );
+      watchIter.m_strValue = rumDebugUtility::FormatVariable( i_pVM, sqObject, rumDebugInterface::WantsValuesAsHex() );
     }
   }
 }
 
 
 // static
-void rumDebugVM::DetachVM( HSQUIRRELVM i_pVM )
+SQInteger rumDebugVM::DetachVM( HSQUIRRELVM i_pVM )
 {
   const auto& iter{ std::find( s_vDebugContexts.begin(), s_vDebugContexts.end(), i_pVM ) };
   if( iter != s_vDebugContexts.end() )
   {
+    bool bPaused{ iter->m_bPaused };
+
     s_vDebugContexts.erase( iter );
+    sq_setnativedebughook( i_pVM, NULL );
+
+    if( bPaused )
+    {
+      RequestResume();
+    }
+
+    if( s_pCurrentVM == i_pVM )
+    {
+      s_pCurrentVM = nullptr;
+    }
+
+    return SQ_OK;
   }
+
+  return SQ_ERROR;
+}
+
+
+// static
+void rumDebugVM::DetachVM( const std::string& i_strName )
+{
+  HSQUIRRELVM pVM{ GetVMByName( i_strName ) };
+  if( pVM )
+  {
+    DetachVM( pVM );
+  }
+}
+
+
+HSQUIRRELVM rumDebugVM::GetVMByName( const std::string& i_strName )
+{
+  const auto& iterVM{ std::find_if( s_mapRegisteredVMs.begin(), s_mapRegisteredVMs.end(),
+                                        [&]( const auto& iter )
+    {
+      return iter.second.compare( i_strName ) == 0;
+    } ) };
+  if( iterVM != s_mapRegisteredVMs.end() )
+  {
+    return iterVM->first;
+  }
+
+  return nullptr;
+}
+
+
+// static
+void rumDebugVM::EnableDebugInfo( HSQUIRRELVM i_pVM, bool i_bEnable )
+{
+  sq_enabledebuginfo( i_pVM, i_bEnable ? SQTrue : SQFalse );
 }
 
 
@@ -308,10 +377,18 @@ void rumDebugVM::FileOpen( const std::filesystem::path& i_fsFilePath, uint32_t i
 
 
 // static
+SQInteger rumDebugVM::IsDebuggerAttached( HSQUIRRELVM i_pVM )
+{
+  const auto& iter{ std::find( s_vDebugContexts.begin(), s_vDebugContexts.end(), i_pVM ) };
+  return iter != s_vDebugContexts.end() ? SQTrue : SQFalse;
+}
+
+
+// static
 void rumDebugVM::NativeDebugHook( HSQUIRRELVM const i_pVM, const SQInteger i_eHookType, const SQChar* i_strFileName,
                                   const SQInteger i_iLine, const SQChar* const i_strFunctionName )
 {
-   if( SQ_LINEEXECUTION != i_eHookType )
+  if( SQ_LINEEXECUTION != i_eHookType )
   {
     return;
   }
@@ -362,6 +439,7 @@ void rumDebugVM::NativeDebugHook( HSQUIRRELVM const i_pVM, const SQInteger i_eHo
   {
     case rumDebugContext::StepDirective::StepOver:
     {
+      iterContext->m_eStepDirective = rumDebugContext::StepDirective::Resume;
       if( iStackLevel <= (SQInteger)iterContext->m_uiStepDirectiveStackLevel )
       {
         SuspendVM( i_pVM, *iterContext, uiLine, fsFilePath );
@@ -371,6 +449,7 @@ void rumDebugVM::NativeDebugHook( HSQUIRRELVM const i_pVM, const SQInteger i_eHo
 
     case rumDebugContext::StepDirective::StepInto:
     {
+      iterContext->m_eStepDirective = rumDebugContext::StepDirective::Resume;
       if( iStackLevel >= (SQInteger)iterContext->m_uiStepDirectiveStackLevel )
       {
         SuspendVM( i_pVM, *iterContext, uiLine, fsFilePath );
@@ -380,6 +459,7 @@ void rumDebugVM::NativeDebugHook( HSQUIRRELVM const i_pVM, const SQInteger i_eHo
 
     case rumDebugContext::StepDirective::StepOut:
     {
+      iterContext->m_eStepDirective = rumDebugContext::StepDirective::Resume;
       if( iStackLevel < (SQInteger)iterContext->m_uiStepDirectiveStackLevel )
       {
         SuspendVM( i_pVM, *iterContext, uiLine, fsFilePath );
@@ -387,6 +467,37 @@ void rumDebugVM::NativeDebugHook( HSQUIRRELVM const i_pVM, const SQInteger i_eHo
       break;
     }
   }
+}
+
+
+// static
+void rumDebugVM::RegisterVM( HSQUIRRELVM i_pVM, const std::string& i_strName )
+{
+  auto iter{ s_mapRegisteredVMs.find( i_pVM ) };
+  if( iter == s_mapRegisteredVMs.end() )
+  {
+    s_mapRegisteredVMs.insert( std::pair( i_pVM, i_strName ) );
+  }
+  else
+  {
+    iter->second = i_strName;
+  }
+}
+
+
+// static
+void rumDebugVM::RequestAttachVM( const std::string& i_strName )
+{
+  std::lock_guard<std::mutex> cLockGuard( s_mtxAccessLock );
+  s_strAttachRequest = i_strName;
+}
+
+
+// static
+void rumDebugVM::RequestDetachVM( const std::string& i_strName )
+{
+  std::lock_guard<std::mutex> cLockGuard( s_mtxAccessLock );
+  s_strDetachRequest = i_strName;
 }
 
 
@@ -473,6 +584,18 @@ void rumDebugVM::RequestVariable( const rumDebugVariable& i_cVariable )
 
 
 // static
+void rumDebugVM::RequestVariableUpdates()
+{
+  std::lock_guard<std::mutex> cLockGuard( s_mtxAccessLock );
+
+  if( s_vCurrentDebugContext )
+  {
+    s_vCurrentDebugContext->m_bUpdateVariables = true;
+  }
+}
+
+
+// static
 void rumDebugVM::SuspendVM( HSQUIRRELVM i_pVM, rumDebugContext& i_rcContext, uint32_t i_uiLine,
                             const std::filesystem::path& i_fsFilePath )
 {
@@ -519,10 +642,30 @@ void rumDebugVM::SuspendVM( HSQUIRRELVM i_pVM, rumDebugContext& i_rcContext, uin
     s_cvDebugLock.wait( ulock );
 
     i_rcContext.m_bPaused = false;
-
   } while( i_rcContext.m_bUpdateVariables );
 
   s_vRequestedVariables.clear();
+}
+
+
+// static
+void rumDebugVM::Update()
+{
+  if( !s_strAttachRequest.empty() )
+  {
+    std::lock_guard<std::mutex> cLockGuard( s_mtxAccessLock );
+
+    AttachVM( s_strAttachRequest );
+    s_strAttachRequest.clear();
+  }
+
+  if( !s_strDetachRequest.empty() )
+  {
+    std::lock_guard<std::mutex> cLockGuard( s_mtxAccessLock );
+
+    DetachVM( s_strDetachRequest );
+    s_strDetachRequest.clear();
+  }
 }
 
 

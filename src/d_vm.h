@@ -19,12 +19,21 @@ class rumDebugVM
 {
 public:
 
-  static void AttachVM( HSQUIRRELVM i_pVM );
-  static void DetachVM( HSQUIRRELVM i_pVM );
+  // The name and attachment state of a VM used by the interface thread
+  struct rumVMInfo
+  {
+    std::string m_strName;
+    bool m_bAttached{ false };
+  };
+
+  static SQInteger AttachVM( HSQUIRRELVM i_pVM );
+  static SQInteger DetachVM( HSQUIRRELVM i_pVM );
 
   static void BreakpointAdd( rumDebugBreakpoint i_cBreakpoint );
   static void BreakpointRemove( const rumDebugBreakpoint& i_rcBreakpoint );
   static void BreakpointToggle( const rumDebugBreakpoint& i_rcBreakpoint );
+
+  static void EnableDebugInfo( HSQUIRRELVM i_pVM, bool i_bEnable = true );
 
   static void FileOpen( const std::filesystem::path& i_fsFilePath, uint32_t i_uiLine );
   static void FileClose( const std::filesystem::path& i_fsFilePath );
@@ -59,6 +68,23 @@ public:
     return s_mapOpenedFiles;
   }
 
+  static const std::vector<rumVMInfo> GetVMInfo()
+  {
+    std::vector<rumVMInfo> vVMInfo;
+    vVMInfo.reserve( s_mapRegisteredVMs.size() );
+
+    for( const auto& iter : s_mapRegisteredVMs )
+    {
+      rumVMInfo cInfo;
+      cInfo.m_strName = iter.second;
+      cInfo.m_bAttached = IsDebuggerAttached( iter.first );
+
+      vVMInfo.push_back(std::move(cInfo));
+    }
+
+    return vVMInfo;
+  }
+
   static const std::vector<rumDebugVariable>& GetRequestedVariablesRef()
   {
     return s_vRequestedVariables;
@@ -74,6 +100,13 @@ public:
     return s_vWatchVariables;
   }
 
+  static SQInteger IsDebuggerAttached( HSQUIRRELVM i_pVM );
+
+  static void RegisterVM( HSQUIRRELVM i_pVM, const std::string& i_strName );
+
+  static void RequestAttachVM( const std::string& i_strName );
+  static void RequestDetachVM( const std::string& i_strName );
+
   static void RequestChangeStackLevel( uint32_t i_uiStackLevel );
 
   static void RequestResume();
@@ -82,6 +115,9 @@ public:
   static void RequestStepOver();
 
   static void RequestVariable( const rumDebugVariable& i_rcVariable );
+  static void RequestVariableUpdates();
+
+  static void Update();
 
   static bool WatchVariableAdd( const std::string& i_strName );
   static bool WatchVariableEdit( const rumDebugVariable& i_rcVariable, const std::string& i_strEdit );
@@ -92,8 +128,14 @@ public:
 
 private:
 
+  // The VM must be registered by name in order to use these
+  static void AttachVM( const std::string& i_strName );
+  static void DetachVM( const std::string& i_strName );
+
   static void BuildLocalVariables( HSQUIRRELVM i_pVM, int32_t i_StackLevel );
   static void BuildVariables( HSQUIRRELVM i_pVM, std::vector<rumDebugVariable>& io_vVariables );
+
+  static HSQUIRRELVM GetVMByName( const std::string& i_strName );
 
   static void NativeDebugHook( HSQUIRRELVM const i_pVM, const SQInteger i_eHookType, const SQChar* i_strFileName,
                                const SQInteger i_iLine, const SQChar* const i_strFunctionName );
@@ -104,10 +146,17 @@ private:
   // All of the currently attached VMs
   static std::vector<rumDebugContext> s_vDebugContexts;
 
+  // VMs that are awaiting attach/detach state changes
+  static std::string s_strAttachRequest;
+  static std::string s_strDetachRequest;
+
   static rumDebugContext* s_vCurrentDebugContext;
 
   // The current VM that is being debugged
   static HSQUIRRELCONSTVM s_pCurrentVM;
+
+  // Registered VM mapping to user-provided name
+  static std::map<HSQUIRRELVM, std::string> s_mapRegisteredVMs;
 
   // Currently set breakpoints
   static std::vector<rumDebugBreakpoint> s_vBreakpoints;
