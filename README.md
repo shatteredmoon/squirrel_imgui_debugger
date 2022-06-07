@@ -34,14 +34,27 @@ To use this library, your program must already support both [Squirrel](http://sq
 For remote debugging, your program must additionally include support for [NetImgui](https://github.com/sammyfreg/netImgui) or a similar application.
 
 ## Release Notes
+### v0.2
+*Adds a new VMs tab to the Callstack/Breakpoints window for attaching and detaching registered VMs with the press of a button.
+*Adds a Show Hex checkbox for showing integers as hex.
+*Adds RequestVariableUpdates() for forcing updates on all variables - used by the Show Hex check box.
+*The FindSymbol call will now try the consttable for variable information as a last resort.
+*Made the watch window just say "running" when the context isn't paused like most of the other tabs.
+*Adds a temporary stub tab next to Watched/Locals so that the Show Hex checkbox will not wrap to an undesirable location.
+*Fix for misc. crashes when the active context is null.
+*Adds GetVMByName() helper.
+*Adds IsDebuggerAttached() query.
+*Adds a rumVMInfo struct and GetVMInfo() call for querying a VMs name and attachment state.
+
 ### v0.1
-Initial release
+*Initial release
+
 
 ## Getting started
 ### Build the library or embed the source
 There are two methods for using the debugger:
 
-1. Open the provided solution and build the library for either release or debug. Link to the generated .lib file in your program.
+1. Open the provided solution and build the static library for either release or debug. Link to the generated .lib file in your program.
 2. Copy the source code in the `src` folder to your project and include the source.
 
 ### Include headers
@@ -55,34 +68,30 @@ There are two major components to the debugger that you'll need to access: the V
 ### Link to the library
 squirrel_imgui_debugger.lib
 
-### Attach your VM(s)
-Attaching a squirrel VM is as simple as adding the following line of code anywhere in your program:
-
-`rumDebugVM::AttachVM( mySquirrelVM );`
-
-However, you'll probably want to design your program to attach programmatically based on a menu selection, keypress, or console command.
-
-### Detach your VM(s)
-Similarly, you can detach a VM with this line of code:
-
-`rumDebugVM::DetachVM( mySquirrelVM );`
-
-### Create an interface thread
+### Create the ImGui interface thread
 You'll need to create a thread for the ImGui interface to run on separately from your main program thread. Here's some example code to get you started:
 
 ```
 #define MY_NETIMGUI_PORT 8888U
 
 std::thread myDebuggerThread;
-bool shutdownRequested{ false };
 
 void ScriptDebuggerThread( const std::string& strPath, const bool& shutdownRequested );
 
-void ConnectScriptDebugger( const bool& shutdownRequested )
+void main()
 {
-  myDebuggerThread = std::thread( &ScriptDebuggerThread,
-                                  "path/to/squirrel/scripts",
-                                  std::ref( shutdownRequested ) );
+  // ...
+
+  bool shutdownRequested{ false };
+  std::thread myDebuggerThread( &ScriptDebuggerThread,
+                                "path/to/squirrel/scripts",
+                                std::ref( shutdownRequested ) );
+  // ...
+
+  if( myDebuggerThread.joinable() )
+  {
+    myDebuggerThread.join();
+  }
 }
 
 void ScriptDebuggerThread( const std::string& strPath, const bool& shutdownRequested )
@@ -98,17 +107,40 @@ void ScriptDebuggerThread( const std::string& strPath, const bool& shutdownReque
 }
 ```
 
-Somewhere in your code, possibly during initialization, you'll need to call the `ConnectScriptDebugger` function so that the debugger thread is created. Again, however, you may want to consider designing your program so that the debugger thread is only executing when debugging is enabled.
+Consider designing your program so that the debugger thread is only executing when debugging is enabled.
+
+### Enable Squirrel Debug Info
+When you load/compile you Squirrel scripts, you must have debug info enabled or the debugger will not be able to debug the script:
+
+`rumDebugVM::EnableDebugInfo( mySquirrelVM );`
+
+You can also disable debug info:
+
+`rumDebugVM::EnableDebugInfo( mySquirrelVM, false );`
+
+### Allow the debugger to update
+
+Once per frame, call `rumDebugVM::Update()` to allow the debugger to process attach and detach requests. You do not need to call this function if you are only attaching and detaching programmatically. If in doubt, go ahead and call this function per frame.
+
+### Register your VM(s)
+You can optionally register each VM with the script debugger so that you can attach and detach from the VM tab in the debugger interface:
+
+`rumDebugVM::RegisterVM( mySquirrelVM, "MyVMName" );`
+
+### Attach your VM(s)
+To attach a VM programmatically:
+
+`rumDebugVM::AttachVM( mySquirrelVM );`
+
+This is ideal for attaching based on a menu selection, keypress, console command, and/or startup parameter.
+
+### Detach your VM(s)
+Similarly, you can detach a VM with this line of code:
+
+`rumDebugVM::DetachVM( mySquirrelVM );`
 
 ### Shutdown
-Don't forget to join your debugger thread:
-
-```
-if( myDebuggerThread.joinable() )
-{
-  myDebuggerThread.join();
-}
-```
+Don't forget to join your debugger thread! It is best practice to make sure that all VMs are detached before you try to close your program window. If your program/script execution is paused, the program may have difficulty closing because the thread can't process your close request.
 
 ### Configure settings
 You can modify `d_settings.h` to change a few simple things such as the display resolution, how many lines variable previews will show, and the maximum length of filenames.
@@ -131,6 +163,8 @@ In the final panel at the bottom right, you can find both the Callstack and Brea
 The Callstack tab is only populated when the program is paused at a breakpoint. You can switch the stack level by double-clicking on the stack row. This will automatically bring the file and line into focus and all local variable info at the request stack level will be reflected in the Locals tab on the left.
 
 The Breakpoints tab shows all currently set breakpoints and whether or not they're enabled or disabled. You can toggle breakpoints by double-clicking on the first column. Otherwise, you can jump directly to a breakpoint by double-clicking on its row.
+
+The VM tab shows all VMs by the name that was provided during VM registration and a button to modify the current attachment state. If the VM is currently attached, there will be a button provided for detaching the VM and vice-versa.
 
 While paused at a breakpoint, you can:
 1. Resume execution by pressing F5
