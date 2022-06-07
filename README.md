@@ -35,19 +35,19 @@ For remote debugging, your program must additionally include support for [NetImg
 
 ## Release Notes
 ### v0.2
-*Adds a new VMs tab to the Callstack/Breakpoints window for attaching and detaching registered VMs with the press of a button.
-*Adds a Show Hex checkbox for showing integers as hex.
-*Adds RequestVariableUpdates() for forcing updates on all variables - used by the Show Hex check box.
-*The FindSymbol call will now try the consttable for variable information as a last resort.
-*Made the watch window just say "running" when the context isn't paused like most of the other tabs.
-*Adds a temporary stub tab next to Watched/Locals so that the Show Hex checkbox will not wrap to an undesirable location.
-*Fix for misc. crashes when the active context is null.
-*Adds GetVMByName() helper.
-*Adds IsDebuggerAttached() query.
-*Adds a rumVMInfo struct and GetVMInfo() call for querying a VMs name and attachment state.
+* Adds a new VMs tab to the Callstack/Breakpoints window for attaching and detaching registered VMs with the press of a button.
+* Adds a Show Hex checkbox for showing integers as hex.
+* Adds RequestVariableUpdates() for forcing updates on all variables - used by the Show Hex check box.
+* The FindSymbol call will now try the consttable for variable information as a last resort.
+* Made the watch window just say "running" when the context isn't paused like most of the other tabs.
+* Adds a temporary stub tab next to Watched/Locals so that the Show Hex checkbox will not wrap to an undesirable location.
+* Fix for misc. crashes when the active context is null.
+* Adds GetVMByName() helper.
+* Adds IsDebuggerAttached() query.
+* Adds a rumVMInfo struct and GetVMInfo() call for querying a VMs name and attachment state.
 
 ### v0.1
-*Initial release
+* Initial release
 
 
 ## Getting started
