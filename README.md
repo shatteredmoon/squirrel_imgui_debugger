@@ -80,14 +80,26 @@ void ScriptDebuggerThread( const std::string& strPath, const bool& shutdownReque
 
 void main()
 {
-  // ...
+  // Program init
 
   bool shutdownRequested{ false };
   std::thread myDebuggerThread( &ScriptDebuggerThread,
                                 "path/to/squirrel/scripts",
                                 std::ref( shutdownRequested ) );
-  // ...
 
+  rumDebugVM::EnableDebugInfo( myVM );
+  // ... load scripts
+  rumDebugVM::RegisterVM( myVM, "MyProgram" );
+  rumDebugVM::AttachVM( myVM );
+
+  // Main program loop
+  while( !shutdownRequested )
+  {
+    rumDebugVM::Update();
+  }
+
+  // Program shutdown
+  rumDebugVM::DetachVM( myVM );
   if( myDebuggerThread.joinable() )
   {
     myDebuggerThread.join();
