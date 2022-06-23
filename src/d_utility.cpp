@@ -378,21 +378,20 @@ namespace rumDebugUtility
           static char strLowBuffer[20] = { '\0' };
 
 #if _WIN64 || __x86_64__ || __ppc64__
-          if( sizeof( SQInteger ) == sizeof( int32_t ) && ( i >> 32 ) > 0 )
+          if( sizeof( SQInteger ) == sizeof( int64_t ) && ( i >> 32 ) > 0 )
           {
-            _itoa_s( static_cast<int32_t>( i >> 32 ), &strHighBuffer[2], 16, 18 );
+            _itoa_s( static_cast<int32_t>( i >> 32 ), &strHighBuffer[2], 18, 16 );
             strVariable = strHighBuffer;
-            strVariable += _itoa_s( static_cast<int32_t>(i & 0xFFFFFFFF), &strLowBuffer[0], 16, 20 );
+            strVariable += _itoa_s( static_cast<int32_t>( i ), &strLowBuffer[0], 20, 16 );
           }
           else
           {
-            _itoa_s( static_cast<int32_t>( i & 0xFFFFFFFF ), &strHighBuffer[2], 16, 20 );
+            _itoa_s( static_cast<int32_t>( i ), &strHighBuffer[2], 18, 16 );
             strVariable = strHighBuffer;
           }
 #else
-          _itoa_s( static_cast<int32_t>( i & 0xFFFFFFFF ), &strHighBuffer[2], 16, 20 );
+          _itoa_s( static_cast<int32_t>( i ), &strHighBuffer[2], 18, 16 );
           strVariable = strHighBuffer;
-
 #endif
         }
         else
