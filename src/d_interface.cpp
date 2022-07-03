@@ -248,9 +248,15 @@ void rumDebugInterface::DisplayCode( const std::string& i_strSource, uint32_t i_
 
         if( ImGui::BeginPopupContextItem( strID.c_str() ) )
         {
-          if( ImGui::SmallButton( "Copy" ) )
+          if( ImGui::SmallButton( "Copy Name" ) )
           {
             ImGui::SetClipboardText( token.c_str() );
+            ImGui::CloseCurrentPopup();
+          }
+          else if( ImGui::SmallButton( "Copy Value" ) )
+          {
+            rumDebugVariable cVariable{ GetVariable( token ) };
+            ImGui::SetClipboardText( cVariable.m_strValue.c_str() );
             ImGui::CloseCurrentPopup();
           }
           else if( ImGui::SmallButton( "Watch" ) )
@@ -1344,7 +1350,17 @@ void rumDebugInterface::UpdateWatchTab()
           ImGui::PushID( strContentID.c_str() );
           if( ImGui::BeginPopupContextItem() )
           {
-            if( ImGui::Button( "Delete" ) )
+            if( ImGui::SmallButton( "Copy Name" ) )
+            {
+              ImGui::SetClipboardText( iter.m_strName.c_str() );
+              ImGui::CloseCurrentPopup();
+            }
+            else if( ImGui::SmallButton( "Copy Value" ) )
+            {
+              ImGui::SetClipboardText( iter.m_strValue.c_str() );
+              ImGui::CloseCurrentPopup();
+            }
+            else if( ImGui::Button( "Delete" ) )
             {
               rumDebugVM::WatchVariableRemove( iter );
               ImGui::CloseCurrentPopup();

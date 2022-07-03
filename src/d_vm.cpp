@@ -497,6 +497,11 @@ void rumDebugVM::RequestDetachVM( const std::string& i_strName )
 {
   std::lock_guard<std::mutex> cLockGuard( s_mtxAccessLock );
   s_strDetachRequest = i_strName;
+
+  if( s_vCurrentDebugContext )
+  {
+    s_vCurrentDebugContext->m_bUpdateVariables = false;
+  }
 }
 
 
@@ -644,6 +649,8 @@ void rumDebugVM::SuspendVM( HSQUIRRELVM i_pVM, rumDebugContext& i_rcContext, uin
   } while( i_rcContext.m_bUpdateVariables );
 
   s_vRequestedVariables.clear();
+
+  Update();
 }
 
 
