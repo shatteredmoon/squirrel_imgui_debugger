@@ -1014,16 +1014,21 @@ void rumDebugInterface::UpdateSourceCode()
 
                 ImGui::Text( "%d", iLine );
 
-                if( ImGui::IsItemHovered() )
-                {
-                  rumDebugBreakpoint cBreakpoint( rcFile.m_fsFilePath, iLine );
+                // Calculate the column bounds that can take mouse-clicks
+                auto vItemRectMin{ ImGui::GetItemRectMin() };
+                auto vItemRectMax{ ImGui::GetItemRectMax() };
+                vItemRectMax.x += ImGui::GetColumnWidth();
 
+                if( ImGui::IsMouseHoveringRect( vItemRectMin, vItemRectMax ) )
+                {
                   if( ImGui::IsKeyPressed( ImGuiKey_F9 ) || ImGui::IsMouseDoubleClicked( ImGuiMouseButton_Left ) )
                   {
+                    rumDebugBreakpoint cBreakpoint( rcFile.m_fsFilePath, iLine );
                     rumDebugVM::BreakpointToggle( cBreakpoint );
                   }
                   else if( ImGui::IsKeyPressed( ImGuiKey_Delete ) )
                   {
+                    rumDebugBreakpoint cBreakpoint( rcFile.m_fsFilePath, iLine );
                     rumDebugVM::BreakpointRemove( cBreakpoint );
                   }
                 }
@@ -1048,10 +1053,23 @@ void rumDebugInterface::UpdateSourceCode()
                   DisplayCode( strLine, iLine, bInMultilineComment );
                   ImGui::EndGroup();
 
-                  if( ImGui::IsItemHovered() && ImGui::IsKeyPressed( ImGuiKey_F9 ) )
+                  // Calculate the column bounds that can take mouse-clicks
+                  vItemRectMin = ImGui::GetItemRectMin();
+                  vItemRectMax = ImGui::GetItemRectMax();
+                  vItemRectMax.x += ImGui::GetColumnWidth();
+
+                  if( ImGui::IsMouseHoveringRect( vItemRectMin, vItemRectMax ) )
                   {
-                    rumDebugBreakpoint cBreakpoint{ rcFile.m_fsFilePath, static_cast<uint32_t>( iLine ) };
-                    rumDebugVM::BreakpointToggle( cBreakpoint );
+                    if( ImGui::IsKeyPressed( ImGuiKey_F9 ) )
+                    {
+                      rumDebugBreakpoint cBreakpoint{ rcFile.m_fsFilePath, static_cast<uint32_t>( iLine ) };
+                      rumDebugVM::BreakpointToggle( cBreakpoint );
+                    }
+                    else if( ImGui::IsKeyPressed( ImGuiKey_Delete ) )
+                    {
+                      rumDebugBreakpoint cBreakpoint{ rcFile.m_fsFilePath, static_cast<uint32_t>( iLine ) };
+                      rumDebugVM::BreakpointRemove( cBreakpoint );
+                    }
                   }
                 }
               }

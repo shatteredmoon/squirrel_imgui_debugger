@@ -219,6 +219,8 @@ SQInteger rumDebugVM::DetachVM( HSQUIRRELVM i_pVM )
   {
     bool bPaused{ iter->m_bPaused };
 
+    iter->m_eStepDirective = rumDebugContext::StepDirective::Resume;
+
     s_vDebugContexts.erase( iter );
     sq_setnativedebughook( i_pVM, NULL );
 
@@ -439,7 +441,6 @@ void rumDebugVM::NativeDebugHook( HSQUIRRELVM const i_pVM, const SQInteger i_eHo
   {
     case rumDebugContext::StepDirective::StepOver:
     {
-      iterContext->m_eStepDirective = rumDebugContext::StepDirective::Resume;
       if( iStackLevel <= (SQInteger)iterContext->m_uiStepDirectiveStackLevel )
       {
         SuspendVM( i_pVM, *iterContext, uiLine, fsFilePath );
@@ -449,7 +450,6 @@ void rumDebugVM::NativeDebugHook( HSQUIRRELVM const i_pVM, const SQInteger i_eHo
 
     case rumDebugContext::StepDirective::StepInto:
     {
-      iterContext->m_eStepDirective = rumDebugContext::StepDirective::Resume;
       if( iStackLevel >= (SQInteger)iterContext->m_uiStepDirectiveStackLevel )
       {
         SuspendVM( i_pVM, *iterContext, uiLine, fsFilePath );
@@ -459,7 +459,6 @@ void rumDebugVM::NativeDebugHook( HSQUIRRELVM const i_pVM, const SQInteger i_eHo
 
     case rumDebugContext::StepDirective::StepOut:
     {
-      iterContext->m_eStepDirective = rumDebugContext::StepDirective::Resume;
       if( iStackLevel < (SQInteger)iterContext->m_uiStepDirectiveStackLevel )
       {
         SuspendVM( i_pVM, *iterContext, uiLine, fsFilePath );
