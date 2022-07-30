@@ -35,6 +35,7 @@ For remote debugging, your program must additionally include support for [NetImg
 
 ## Release Notes
 ### v0.2
+* Stores the context in a thread_local pointer so that the debugger context doesn't conflict with other ImGui contexts.
 * Adds a new VMs tab to the Callstack/Breakpoints window for attaching and detaching registered VMs with the press of a button.
 * Adds a Show Hex checkbox for showing integers as hex.
 * Adds RequestVariableUpdates() for forcing updates on all variables - used by the Show Hex check box.
@@ -156,6 +157,23 @@ Don't forget to join your debugger thread! It is best practice to make sure that
 
 ### Configure settings
 You can modify `d_settings.h` to change a few simple things such as the display resolution, how many lines variable previews will show, and the maximum length of filenames.
+
+### Managing multiple ImGui contexts
+If you're already using ImGui in your project, you'll need to support multiple contexts. The squirrel_imgui_debugger defines a thread_local global pointer that you can use to easily keep the ImGui context pointer separate between your program and the debugger. You will need to add this to your imconfig.h file:
+
+```
+struct ImGuiContext;
+extern thread_local ImGuiContext* g_pcImGuiTLSContext;
+#define GImGui g_pcImGuiTLSContext
+```
+
+Then, store the context wherever you create it in `g_pcImGuiTLSContext` like so:
+
+`g_pcImGuiTLSContext = ImGui::CreateContext();`
+
+You'll also need to reference the thread_local pointer when you destroy the ImGui context:
+
+`ImGui::DestroyContext( g_pcImGuiTLSContext );`
 
 ## Using the debugger
 Once your VM is attached, ImGui should render a debugging environment similar to Visual Studio.
