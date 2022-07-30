@@ -40,6 +40,8 @@ SOFTWARE.
 #include <NetImgui_Api.h>
 #include <private/NetImgui_CmdPackets.h>
 
+// Make the GImGui pointer thread-local so that multiple contexts can run (see imconfig.h)
+thread_local ImGuiContext* g_pcImGuiTLSContext{ nullptr };
 
 std::string rumDebugInterface::s_strScriptPath;
 std::filesystem::path rumDebugInterface::s_fsFocusFile;
@@ -328,8 +330,9 @@ void rumDebugInterface::Init( const std::string& i_strName, uint32_t i_iPort, co
 {
   using namespace NetImgui::Internal;
 
-  auto cContext{ ImGui::CreateContext() };
-  ImGuiIO& io = ImGui::GetIO();
+  g_pcImGuiTLSContext = ImGui::CreateContext();
+
+  ImGuiIO& rImGuiIO{ ImGui::GetIO() };
 
   ImGuiSettingsHandler ini_handler;
   ini_handler.TypeName = "UserData";
@@ -337,21 +340,22 @@ void rumDebugInterface::Init( const std::string& i_strName, uint32_t i_iPort, co
   ini_handler.ReadOpenFn = Settings_ReadOpen; // Called when entering into a new ini entry e.g. "[Window][Name]"
   ini_handler.ReadLineFn = Settings_ReadLine; // Called for every line of text within an ini entry
   ini_handler.WriteAllFn = Settings_WriteAll; // Output every entries into 'out_buf'
-  cContext->SettingsHandlers.push_back( ini_handler );
+
+  g_pcImGuiTLSContext->SettingsHandlers.push_back( ini_handler );
 
   // Add support for function keys
-  io.KeyMap[ImGuiKey_G] = static_cast<int32_t>( CmdInput::eVirtualKeys::vkKeyboardA ) + ( ImGuiKey_G - ImGuiKey_A );
-  io.KeyMap[ImGuiKey_F5] = static_cast<int32_t>( CmdInput::eVirtualKeys::vkKeyboardSuperF1 ) + ( ImGuiKey_F5 - ImGuiKey_F1 );
-  io.KeyMap[ImGuiKey_F9] = static_cast<int32_t>( CmdInput::eVirtualKeys::vkKeyboardSuperF1 ) + ( ImGuiKey_F9 - ImGuiKey_F1 );
-  io.KeyMap[ImGuiKey_F10] = static_cast<int32_t>( CmdInput::eVirtualKeys::vkKeyboardSuperF1 ) + ( ImGuiKey_F10 - ImGuiKey_F1 );
-  io.KeyMap[ImGuiKey_F11] = static_cast<int32_t>( CmdInput::eVirtualKeys::vkKeyboardSuperF1 ) + ( ImGuiKey_F11 - ImGuiKey_F1 );
+  rImGuiIO.KeyMap[ImGuiKey_G] = static_cast<int32_t>( CmdInput::eVirtualKeys::vkKeyboardA ) + ( ImGuiKey_G - ImGuiKey_A );
+  rImGuiIO.KeyMap[ImGuiKey_F5] = static_cast<int32_t>( CmdInput::eVirtualKeys::vkKeyboardSuperF1 ) + ( ImGuiKey_F5 - ImGuiKey_F1 );
+  rImGuiIO.KeyMap[ImGuiKey_F9] = static_cast<int32_t>( CmdInput::eVirtualKeys::vkKeyboardSuperF1 ) + ( ImGuiKey_F9 - ImGuiKey_F1 );
+  rImGuiIO.KeyMap[ImGuiKey_F10] = static_cast<int32_t>( CmdInput::eVirtualKeys::vkKeyboardSuperF1 ) + ( ImGuiKey_F10 - ImGuiKey_F1 );
+  rImGuiIO.KeyMap[ImGuiKey_F11] = static_cast<int32_t>( CmdInput::eVirtualKeys::vkKeyboardSuperF1 ) + ( ImGuiKey_F11 - ImGuiKey_F1 );
 
-  io.DisplaySize.x = static_cast<float>( DEBUGGER_DISPLAY_WIDTH );
-  io.DisplaySize.y = static_cast<float>( DEBUGGER_DISPLAY_HEIGHT );
+  rImGuiIO.DisplaySize.x = static_cast<float>( DEBUGGER_DISPLAY_WIDTH );
+  rImGuiIO.DisplaySize.y = static_cast<float>( DEBUGGER_DISPLAY_HEIGHT );
 
   int32_t iWidth, iHeight;
   unsigned char* pPixels{ nullptr };
-  io.Fonts->GetTexDataAsRGBA32( &pPixels, &iWidth, &iHeight );
+  rImGuiIO.Fonts->GetTexDataAsRGBA32( &pPixels, &iWidth, &iHeight );
 
   NetImgui::Startup();
   NetImgui::ConnectFromApp( i_strName.c_str(), i_iPort );
@@ -473,7 +477,12 @@ void rumDebugInterface::Settings_WriteAll( ImGuiContext* i_pContext, ImGuiSettin
 void rumDebugInterface::Shutdown()
 {
   NetImgui::Shutdown();
-  ImGui::DestroyContext();
+
+  if( g_pcImGuiTLSContext )
+  {
+    ImGui::DestroyContext( g_pcImGuiTLSContext );
+    g_pcImGuiTLSContext = nullptr;
+  }
 }
 
 
