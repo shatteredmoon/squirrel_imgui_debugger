@@ -76,7 +76,8 @@ namespace rumDebugUtility
       sq_pushinteger( i_pVM, iIndex );
 
       // Get the next member
-      if( bSuccess = SQ_SUCCEEDED( sq_next( i_pVM, -2 ) ) )
+      bSuccess = SQ_SUCCEEDED( sq_next( i_pVM, -2 ) );
+      if( bSuccess )
       {
         if( 0 != iIndex )
         {
@@ -223,7 +224,7 @@ namespace rumDebugUtility
 
   SQObject FindSymbol( HSQUIRRELVM i_pVM, const std::string& i_strVariable, uint32_t i_iLocalStackLevel )
   {
-    SQObject sqObject;
+    SQObject sqObject{};
 
     SQInteger iTop{ sq_gettop( i_pVM ) };
 
@@ -253,8 +254,8 @@ namespace rumDebugUtility
       {
         // Not found in the root table, so check locals
         int32_t iIndex{ 0 };
-        const SQChar* strName{ nullptr };
-        while( ( strName = sq_getlocal( i_pVM, i_iLocalStackLevel, iIndex++ ) ) )
+        const SQChar* strName{ sq_getlocal( i_pVM, i_iLocalStackLevel, iIndex++ ) };
+        while( strName )
         {
           SQObjectType eType{ sq_gettype( i_pVM, -1 ) };
           if( ( ( eType == OT_CLASS ) || ( eType == OT_INSTANCE ) ) && ( strClass.compare( strName ) == 0 ) )
@@ -271,6 +272,8 @@ namespace rumDebugUtility
           }
 
           sq_poptop( i_pVM );
+
+          strName = sq_getlocal( i_pVM, i_iLocalStackLevel, iIndex++ );
         }
       }
     }
@@ -456,7 +459,9 @@ namespace rumDebugUtility
       return "";
     }
 
+#if DEBUG_OUTPUT
     SQInteger iTop{ sq_gettop( i_pVM ) };
+#endif
 
     std::string strName;
 
@@ -490,9 +495,10 @@ namespace rumDebugUtility
       sq_pushinteger( i_pVM, iIndex );
 
       // Iterate
-      if( bSuccess = SQ_SUCCEEDED( sq_next( i_pVM, -2 ) ) )
+      bSuccess = SQ_SUCCEEDED( sq_next( i_pVM, -2 ) );
+      if( bSuccess )
       {
-        // The object value is at position -1, so get it's hash
+        // The object value is at position -1, so get its hash
         const auto iIterHash{ sq_gethash( i_pVM, -1 ) };
         if( iObjectHash == iIterHash )
         {
@@ -525,7 +531,7 @@ namespace rumDebugUtility
   }
 
 
-  // Not that Squirrel's IdType2Name helper could be used here, but it requires an include of cassert which would blow
+  // Note that Squirrel's IdType2Name helper could be used here, but it requires an include of cassert which would blow
   // away any cost savings and it isn't as precise as the below solution since it doesn't differentiate between certain
   // things like a closure and a nativeclosure.
   std::string GetTypeName( SQObjectType i_eObjectType )
