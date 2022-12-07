@@ -141,10 +141,9 @@ void rumDebugInterface::DisplayCode( const std::string& i_strSource, uint32_t i_
   bool bInComment{ false };
   bool bInDoubleQuotes{ false };
   bool bInSingleQuotes{ false };
-  size_t szOffset{ 0 };
 
-  std::regex rx( R"(/\*|\*/|\\'|\\"|//|[():;=+-, !^&*\[\]\|\\'\"<>?~])" );
-  std::sregex_token_iterator iter( i_strSource.begin(), i_strSource.end(), rx, { -1, 0 } );
+  std::regex rxSeparators( R"(/\*|\*/|\\'|\\"|//|[():;=+-, !^&*\[\]\|\\'\"<>?~])" );
+  std::sregex_token_iterator iter( i_strSource.begin(), i_strSource.end(), rxSeparators, { -1, 0 } );
   std::vector<std::string> vTokens;
   std::remove_copy_if( iter, std::sregex_token_iterator(),
                        std::back_inserter( vTokens ),
@@ -226,8 +225,8 @@ void rumDebugInterface::DisplayCode( const std::string& i_strSource, uint32_t i_
         if( ImGui::IsItemHovered() )
         {
           // Only show tooltip info for potential variable names
-          std::regex rx( R"([a-zA-Z_]+)" );
-          if( std::regex_search( token, rx ) )
+          std::regex rxToken( R"([a-zA-Z_]+)" );
+          if( std::regex_search( token, rxToken ) )
           {
             rumDebugVariable cVariable{ GetVariable( token ) };
             ImGui::BeginTooltip();
@@ -307,10 +306,10 @@ rumDebugVariable rumDebugInterface::GetVariable( const std::string& i_strName )
     {
       // Check the recently requested variables
       const auto& rcvRequestedVariables{ rumDebugVM::GetRequestedVariablesRef() };
-      const auto& watchIter{ std::find( rcvRequestedVariables.begin(), rcvRequestedVariables.end(), i_strName ) };
-      if( watchIter != rcvRequestedVariables.end() )
+      const auto& requestedIter{ std::find( rcvRequestedVariables.begin(), rcvRequestedVariables.end(), i_strName ) };
+      if( requestedIter != rcvRequestedVariables.end() )
       {
-        cVariable = *watchIter;
+        cVariable = *requestedIter;
       }
       else
       {
@@ -385,7 +384,9 @@ void rumDebugInterface::SetFileFocus( const std::filesystem::path& i_fsFocusFile
 
 
 // static
-void rumDebugInterface::Settings_ReadLine( ImGuiContext* i_pContext, ImGuiSettingsHandler* i_pSettingsHandler, void* i_pEntry,
+void rumDebugInterface::Settings_ReadLine( [[maybe_unused]] ImGuiContext* i_pContext,
+                                           [[maybe_unused]] ImGuiSettingsHandler* i_pSettingsHandler,
+                                           [[maybe_unused]] void* i_pEntry,
                                            const char* i_strLine )
 {
   std::string strLine( i_strLine );
@@ -419,7 +420,8 @@ void rumDebugInterface::Settings_ReadLine( ImGuiContext* i_pContext, ImGuiSettin
 
 
 // static
-void* rumDebugInterface::Settings_ReadOpen( ImGuiContext* i_pContext, ImGuiSettingsHandler* i_pSettingsHandler,
+void* rumDebugInterface::Settings_ReadOpen( [[maybe_unused]] ImGuiContext* i_pContext,
+                                            [[maybe_unused]] ImGuiSettingsHandler* i_pSettingsHandler,
                                             const char* i_strName )
 {
   ImGuiWindowSettings* pcSettings{ ImGui::FindOrCreateWindowSettings( i_strName ) };
@@ -435,7 +437,8 @@ void* rumDebugInterface::Settings_ReadOpen( ImGuiContext* i_pContext, ImGuiSetti
 
 
 // static
-void rumDebugInterface::Settings_WriteAll( ImGuiContext* i_pContext, ImGuiSettingsHandler* i_pSettingsHandler,
+void rumDebugInterface::Settings_WriteAll( [[maybe_unused]] ImGuiContext* i_pContext,
+                                           [[maybe_unused]] ImGuiSettingsHandler* i_pSettingsHandler,
                                            ImGuiTextBuffer* io_pBuffer )
 {
   // Ballpark reserve
@@ -892,9 +895,9 @@ void rumDebugInterface::UpdateSourceCode()
     // Fetch by copy here because there is potential to modify the list during iteration
     // #TODO - There is a lot of data being copied - work out a threadsafe share
     const auto cvOpenedFiles{ rumDebugVM::GetOpenedFilesCopy() };
-    for( const auto& iter : cvOpenedFiles )
+    for( const auto& fileIter : cvOpenedFiles )
     {
-      const rumDebugFile& rcFile{ iter.second };
+      const rumDebugFile& rcFile{ fileIter.second };
 
       bool bSetFocus{ false };
       if( !s_fsFocusFile.empty() && ( rcFile.m_fsFilePath.compare( s_fsFocusFile ) == 0 ) )
@@ -919,11 +922,11 @@ void rumDebugInterface::UpdateSourceCode()
 
         // Parse the breakpoints for matching lines
         const auto& rcvBreakpoints{ rumDebugVM::GetBreakpointsRef() };
-        for( const auto& iter : rcvBreakpoints )
+        for( const auto& breakpointIter : rcvBreakpoints )
         {
-          if( iter.m_fsFilepath == rcFile.m_fsFilePath )
+          if( breakpointIter.m_fsFilepath == rcFile.m_fsFilePath )
           {
-            vLinesWithBreakpoints.insert( std::pair( iter.m_uiLine, iter.m_bEnabled ) );
+            vLinesWithBreakpoints.insert( std::pair( breakpointIter.m_uiLine, breakpointIter.m_bEnabled ) );
           }
         }
 
@@ -1051,14 +1054,15 @@ void rumDebugInterface::UpdateSourceCode()
                 // The source code column
                 ImGui::TableNextColumn();
 
-                if( ( iRow + 1 ) < (int32_t)rcFile.m_vStringOffsets.size() )
+                if( ( iRow + 1 ) < static_cast<int32_t>( rcFile.m_vStringOffsets.size() ) )
                 {
                   size_t iBegin{ rcFile.m_vStringOffsets[iRow] };
                   size_t iEnd{ rcFile.m_vStringOffsets[iRow + 1] - 1 };
                   std::string strLine{ rcFile.m_strData.substr( iBegin, iEnd - iBegin ) };
 
                   const auto pcContext{ rumDebugVM::GetCurrentDebugContext() };
-                  if (pcContext && pcContext->m_bPaused && ( pcContext->m_uiPausedLine == iLine ) &&
+                  if( pcContext && pcContext->m_bPaused &&
+                      ( pcContext->m_uiPausedLine == static_cast<uint32_t>( iLine ) ) &&
                       ( pcContext->m_fsPausedFile.compare( rcFile.m_fsFilePath ) == 0 ) )
                   {
                     ImGui::TableSetBgColor( ImGuiTableBgTarget_CellBg, uiCurrentLineColor );
@@ -1407,8 +1411,7 @@ void rumDebugInterface::UpdateWatchTab()
         ImGui::TextUnformatted( "+" );
         ImGui::SameLine();
 
-        auto pcContext{ rumDebugVM::GetCurrentDebugContext() };
-        if( pcContext && pcContext->m_bPaused )
+        if( pcContext->m_bPaused )
         {
           ImGui::PushItemWidth( ImGui::GetColumnWidth() );
 
