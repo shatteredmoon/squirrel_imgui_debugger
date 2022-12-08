@@ -159,8 +159,8 @@ void rumDebugVM::BuildLocalVariables( HSQUIRRELVM i_pVM, int32_t i_StackLevel )
   s_vLocalVariables.clear();
 
   int32_t iIndex{ 0 };
-  const SQChar* strName{ nullptr };
-  while( ( strName = sq_getlocal( i_pVM, i_StackLevel, iIndex++ ) ) )
+  const SQChar* strName{ sq_getlocal( i_pVM, i_StackLevel, iIndex++ ) };
+  while( strName )
   {
     const SQObjectType eType{ sq_gettype( i_pVM, -1 ) };
 
@@ -172,6 +172,8 @@ void rumDebugVM::BuildLocalVariables( HSQUIRRELVM i_pVM, int32_t i_StackLevel )
     s_vLocalVariables.emplace_back( std::move( cLocalEntry ) );
 
     sq_poptop( i_pVM );
+
+    strName = sq_getlocal( i_pVM, i_StackLevel, iIndex++ );
   }
 
 #if DEBUG_OUTPUT
@@ -249,22 +251,6 @@ void rumDebugVM::DetachVM( const std::string& i_strName )
   {
     DetachVM( pVM );
   }
-}
-
-
-HSQUIRRELVM rumDebugVM::GetVMByName( const std::string& i_strName )
-{
-  const auto& iterVM{ std::find_if( s_mapRegisteredVMs.begin(), s_mapRegisteredVMs.end(),
-                                        [&]( const auto& iter )
-    {
-      return iter.second.compare( i_strName ) == 0;
-    } ) };
-  if( iterVM != s_mapRegisteredVMs.end() )
-  {
-    return iterVM->first;
-  }
-
-  return nullptr;
 }
 
 
@@ -378,6 +364,22 @@ void rumDebugVM::FileOpen( const std::filesystem::path& i_fsFilePath, uint32_t i
 }
 
 
+HSQUIRRELVM rumDebugVM::GetVMByName( const std::string& i_strName )
+{
+  const auto& iterVM{ std::find_if( s_mapRegisteredVMs.begin(), s_mapRegisteredVMs.end(),
+                                        [&]( const auto& iter )
+    {
+      return iter.second.compare( i_strName ) == 0;
+    } ) };
+  if( iterVM != s_mapRegisteredVMs.end() )
+  {
+    return iterVM->first;
+  }
+
+  return nullptr;
+}
+
+
 // static
 SQInteger rumDebugVM::IsDebuggerAttached( HSQUIRRELVM i_pVM )
 {
@@ -388,7 +390,7 @@ SQInteger rumDebugVM::IsDebuggerAttached( HSQUIRRELVM i_pVM )
 
 // static
 void rumDebugVM::NativeDebugHook( HSQUIRRELVM const i_pVM, const SQInteger i_eHookType, const SQChar* i_strFileName,
-                                  const SQInteger i_iLine, const SQChar* const i_strFunctionName )
+                                  const SQInteger i_iLine, [[maybe_unused]] const SQChar* const i_strFunctionName )
 {
   if( SQ_LINEEXECUTION != i_eHookType )
   {
