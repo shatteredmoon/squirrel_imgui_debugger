@@ -70,9 +70,10 @@ namespace rumDebugInterface
   // Show integer values as hex
   bool g_bShowHex{ false };
 
-  ////////////////////////
-  // Function prototypes
-  ////////////////////////
+
+  ///////////////
+  // Prototypes
+  ///////////////
 
   void DisplayCode( const std::string& i_strSource, uint32_t i_uiLine,
                     bool i_bInMultilineComment );
@@ -319,11 +320,7 @@ namespace rumDebugInterface
             }
             else if( ImGui::SmallButton( "Watch" ) )
             {
-              if( rumDebugVM::WatchVariableAdd( token ) )
-              {
-                rumDebugVM::s_cvDebugLock.notify_all();
-              }
-
+              rumDebugVM::WatchVariableAdd( token );
               ImGui::CloseCurrentPopup();
             }
 
@@ -372,7 +369,6 @@ namespace rumDebugInterface
         {
           cVariable.m_strName = i_strName;
           rumDebugVM::RequestVariable( cVariable );
-          rumDebugVM::s_cvDebugLock.notify_all();
         }
       }
     }
@@ -825,7 +821,6 @@ namespace rumDebugInterface
       std::cout << "Resuming\n";
 #endif
       rumDebugVM::RequestResume();
-      rumDebugVM::s_cvDebugLock.notify_all();
     }
     else if( ImGui::IsKeyPressed( ImGuiKey_F10 ) )
     {
@@ -833,7 +828,6 @@ namespace rumDebugInterface
       std::cout << "Step over\n";
 #endif
       rumDebugVM::RequestStepOver();
-      rumDebugVM::s_cvDebugLock.notify_all();
     }
     else if( ImGui::IsKeyPressed( ImGuiKey_F11 ) )
     {
@@ -851,8 +845,6 @@ namespace rumDebugInterface
 #endif
         rumDebugVM::RequestStepInto();
       }
-
-      rumDebugVM::s_cvDebugLock.notify_all();
     }
   }
 
@@ -1218,7 +1210,6 @@ namespace rumDebugInterface
               {
                 rumDebugVM::FileOpen( iterCallstack.m_strFilename, iterCallstack.m_iLine );
                 rumDebugVM::RequestChangeStackLevel( uiStackIndex );
-                rumDebugVM::s_cvDebugLock.notify_all();
               }
 
               // The stack source file
@@ -1228,7 +1219,6 @@ namespace rumDebugInterface
               {
                 rumDebugVM::FileOpen( iterCallstack.m_strFilename, iterCallstack.m_iLine );
                 rumDebugVM::RequestChangeStackLevel( uiStackIndex );
-                rumDebugVM::s_cvDebugLock.notify_all();
               }
 
               // The function
@@ -1238,7 +1228,6 @@ namespace rumDebugInterface
               {
                 rumDebugVM::FileOpen( iterCallstack.m_strFilename, iterCallstack.m_iLine );
                 rumDebugVM::RequestChangeStackLevel( uiStackIndex );
-                rumDebugVM::s_cvDebugLock.notify_all();
               }
 
               ++uiStackIndex;
@@ -1287,7 +1276,6 @@ namespace rumDebugInterface
     if( ImGui::Checkbox( "Show Hex", &g_bShowHex ) )
     {
       rumDebugVM::RequestVariableUpdates();
-      rumDebugVM::s_cvDebugLock.notify_all();
     }
 
     // WatchAndLocalsChild
@@ -1325,7 +1313,6 @@ namespace rumDebugInterface
             if( ImGui::SmallButton( "Detach" ) )
             {
               rumDebugVM::RequestDetachVM( iter.m_strName );
-              rumDebugVM::s_cvDebugLock.notify_all();
             }
           }
           else
@@ -1333,7 +1320,6 @@ namespace rumDebugInterface
             if( ImGui::SmallButton( "Attach" ) )
             {
               rumDebugVM::RequestAttachVM( iter.m_strName );
-              rumDebugVM::s_cvDebugLock.notify_all();
             }
           }
         }
@@ -1391,10 +1377,7 @@ namespace rumDebugInterface
             if( ImGui::InputText( strContentID.c_str(), strCWatchVariable, IM_ARRAYSIZE( strCWatchVariable ),
                                   ImGuiInputTextFlags_EnterReturnsTrue ) )
             {
-              if( rumDebugVM::WatchVariableEdit( iter, strCWatchVariable ) )
-              {
-                rumDebugVM::s_cvDebugLock.notify_all();
-              }
+              rumDebugVM::WatchVariableEdit( iter, strCWatchVariable );
             }
 
             ImGui::PopItemWidth();
@@ -1457,10 +1440,7 @@ namespace rumDebugInterface
             if( ImGui::InputText( "##NewWatchVariable", strCNewWatchVariable, IM_ARRAYSIZE( strCNewWatchVariable ),
                                   ImGuiInputTextFlags_EnterReturnsTrue ) )
             {
-              if( rumDebugVM::WatchVariableAdd( strCNewWatchVariable ) )
-              {
-                rumDebugVM::s_cvDebugLock.notify_all();
-              }
+              rumDebugVM::WatchVariableAdd( strCNewWatchVariable );
 
               memset( strCNewWatchVariable, '\0', sizeof( char ) * MAX_FILENAME_LENGTH );
             }
