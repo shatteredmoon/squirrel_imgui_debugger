@@ -17,13 +17,6 @@
 
 namespace rumDebugVM
 {
-  // The name and attachment state of a VM used by the interface thread
-  struct rumVMInfo
-  {
-    std::string m_strName;
-    bool m_bAttached{ false };
-  };
-
   SQInteger AttachVM( HSQUIRRELVM i_pVM );
   SQInteger DetachVM( HSQUIRRELVM i_pVM );
 
@@ -40,6 +33,7 @@ namespace rumDebugVM
   const std::vector<rumDebugBreakpoint>& GetBreakpointsRef();
 
   const rumDebugContext* GetCurrentDebugContext();
+  const std::vector<rumDebugContext>& GetDebugContexts();
 
   const std::vector<rumDebugVariable>& GetLocalVariablesRef();
 
@@ -47,8 +41,6 @@ namespace rumDebugVM
   const std::map<std::string, rumDebugFile>& GetOpenedFilesRef();
 
   const std::vector<rumDebugVariable>& GetRequestedVariablesRef();
-
-  const std::vector<rumVMInfo> GetVMInfo();
 
   const std::vector<rumDebugVariable> GetWatchedVariablesCopy();
   const std::vector<rumDebugVariable>& GetWatchedVariablesRef();

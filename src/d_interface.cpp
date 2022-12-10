@@ -1296,8 +1296,8 @@ namespace rumDebugInterface
                                              ImGuiTableFlags_NoSavedSettings };
       if( ImGui::BeginTable( "VMsTable", 2, eTableFlags ) )
       {
-        const auto& vVMInfo{ rumDebugVM::GetVMInfo() };
-        for( const auto& iter : vVMInfo )
+        const auto& cDebugContexts{ rumDebugVM::GetDebugContexts() };
+        for( const auto& iter : cDebugContexts )
         {
           ImGui::TableNextRow();
 
@@ -1433,20 +1433,17 @@ namespace rumDebugInterface
           ImGui::TextUnformatted( "+" );
           ImGui::SameLine();
 
-          if( pcContext->m_bPaused )
+          ImGui::PushItemWidth( ImGui::GetColumnWidth() );
+
+          if( ImGui::InputText( "##NewWatchVariable", strCNewWatchVariable, IM_ARRAYSIZE( strCNewWatchVariable ),
+                                ImGuiInputTextFlags_EnterReturnsTrue ) )
           {
-            ImGui::PushItemWidth( ImGui::GetColumnWidth() );
+            rumDebugVM::WatchVariableAdd( strCNewWatchVariable );
 
-            if( ImGui::InputText( "##NewWatchVariable", strCNewWatchVariable, IM_ARRAYSIZE( strCNewWatchVariable ),
-                                  ImGuiInputTextFlags_EnterReturnsTrue ) )
-            {
-              rumDebugVM::WatchVariableAdd( strCNewWatchVariable );
-
-              memset( strCNewWatchVariable, '\0', sizeof( char ) * MAX_FILENAME_LENGTH );
-            }
-
-            ImGui::PopItemWidth();
+            memset( strCNewWatchVariable, '\0', sizeof( char ) * MAX_FILENAME_LENGTH );
           }
+
+          ImGui::PopItemWidth();
 
           // WatchTable
           ImGui::EndTable();

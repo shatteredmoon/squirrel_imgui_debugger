@@ -67,12 +67,6 @@ namespace rumDebugVM
 
   rumDebugContext* g_pcCurrentDebugContext{ nullptr };
 
-  // The current VM that is being debugged
-  HSQUIRRELCONSTVM g_pcCurrentVM{ nullptr };
-
-  // Registered VM mapping to user-provided name
-  std::map<HSQUIRRELVM, std::string> g_cRegisteredVMs;
-
   // Currently set breakpoints
   std::vector<rumDebugBreakpoint> g_cBreakpoints;
 
@@ -104,12 +98,13 @@ namespace rumDebugVM
 
   // The VM must be registered by name in order to use these
   void AttachVM( const std::string& i_strName );
+  void AttachVM( HSQUIRRELVM i_pVM, const std::string& i_strName );
   void DetachVM( const std::string& i_strName );
 
   void BuildLocalVariables( HSQUIRRELVM i_pcVM, int32_t i_StackLevel );
   void BuildVariables( HSQUIRRELVM i_pcVM, std::vector<rumDebugVariable>& io_vVariables );
 
-  HSQUIRRELVM GetVMByName( const std::string& i_strName );
+  rumDebugContext* GetVMByName( const std::string& i_strName );
 
   void NativeDebugHook( HSQUIRRELVM const i_pcVM, const SQInteger i_eHookType, const SQChar* i_strFileName,
                         const SQInteger i_iLine, const SQChar* const i_strFunctionName );
@@ -118,35 +113,70 @@ namespace rumDebugVM
                   const std::filesystem::path& i_fsFilePath );
 
 
+  void AttachVM( const std::string& i_strName )
+  {
+    rumDebugContext* pcVM{ GetVMByName( i_strName ) };
+    if( pcVM )
+    {
+      AttachVM( pcVM->m_pcVM, i_strName );
+    }
+  }
 
   SQInteger AttachVM( HSQUIRRELVM i_pcVM )
+  {
+    std::string strName;
+
+    // Is this vm already registered?
+    const auto& iter{ std::find( g_cDebugContexts.begin(), g_cDebugContexts.end(), i_pcVM ) };
+    if( iter == g_cDebugContexts.end() )
+    {
+      // Create a name
+      std::ostringstream strAddress;
+      strAddress << i_pcVM;
+      strName = strAddress.str();
+    }
+    else
+    {
+      // Use the existing name
+      strName = iter->m_strName;
+    }
+
+    AttachVM( i_pcVM, strName );
+    
+    return SQ_OK;
+  }
+
+
+  void AttachVM( HSQUIRRELVM i_pcVM, const std::string& i_strName )
   {
     const auto& iter{ std::find( g_cDebugContexts.begin(), g_cDebugContexts.end(), i_pcVM ) };
     if( iter == g_cDebugContexts.end() )
     {
+      // Create a new context and attach to it
       rumDebugContext cContext( i_pcVM );
-      sq_setnativedebughook( i_pcVM, &NativeDebugHook );
-      g_cDebugContexts.emplace_back( std::move( cContext ) );
+      cContext.m_strName = i_strName;
+      cContext.m_bAttached = true;
 
-      if( !g_pcCurrentVM )
+      if( nullptr == g_pcCurrentDebugContext )
       {
-        g_pcCurrentVM = i_pcVM;
+        g_pcCurrentDebugContext = &cContext;
       }
 
-      return SQ_OK;
+      g_cDebugContexts.emplace_back( std::move( cContext ) );
     }
-
-    return SQ_ERROR;
-  }
-
-
-  void AttachVM( const std::string& i_strName )
-  {
-    HSQUIRRELVM pcVM{ GetVMByName( i_strName ) };
-    if( pcVM )
+    else
     {
-      AttachVM( pcVM );
+      // Attach to the existing context
+      iter->m_bAttached = true;
+
+      if( nullptr == g_pcCurrentDebugContext )
+      {
+        g_pcCurrentDebugContext = &*iter;
+      }
     }
+
+    sq_setnativedebughook( i_pcVM, &NativeDebugHook );
+
   }
 
 
@@ -264,18 +294,13 @@ namespace rumDebugVM
       bool bPaused{ iter->m_bPaused };
 
       iter->m_eStepDirective = rumDebugContext::StepDirective::Resume;
+      iter->m_bAttached = false;
 
-      g_cDebugContexts.erase( iter );
       sq_setnativedebughook( i_pcVM, NULL );
 
       if( bPaused )
       {
         RequestResume();
-      }
-
-      if( g_pcCurrentVM == i_pcVM )
-      {
-        g_pcCurrentVM = nullptr;
       }
 
       return SQ_OK;
@@ -287,10 +312,10 @@ namespace rumDebugVM
 
   void DetachVM( const std::string& i_strName )
   {
-    HSQUIRRELVM pcVM{ GetVMByName( i_strName ) };
+    rumDebugContext* pcVM{ GetVMByName( i_strName ) };
     if( pcVM )
     {
-      DetachVM( pcVM );
+      DetachVM( pcVM->m_pcVM );
     }
   }
 
@@ -420,6 +445,12 @@ namespace rumDebugVM
   }
 
 
+  const std::vector<rumDebugContext>& GetDebugContexts()
+  {
+    return g_cDebugContexts;
+  }
+
+
   const std::vector<rumDebugVariable>& GetLocalVariablesRef()
   {
     return g_cLocalVariables;
@@ -444,37 +475,19 @@ namespace rumDebugVM
   }
 
 
-  HSQUIRRELVM GetVMByName( const std::string& i_strName )
+  rumDebugContext* GetVMByName( const std::string& i_strName )
   {
-    const auto& iterVM{ std::find_if( g_cRegisteredVMs.begin(), g_cRegisteredVMs.end(),
-                                          [&]( const auto& iter )
-      {
-        return iter.second.compare( i_strName ) == 0;
-      } ) };
-    if( iterVM != g_cRegisteredVMs.end() )
+    const auto& iterVM{ std::find_if( g_cDebugContexts.begin(), g_cDebugContexts.end(),
+                                      [&]( const auto& iter )
+                                      {
+                                        return iter.m_strName.compare( i_strName ) == 0;
+                                      } ) };
+    if( iterVM != g_cDebugContexts.end() )
     {
-      return iterVM->first;
+      return &*iterVM;
     }
 
     return nullptr;
-  }
-
-
-  const std::vector<rumVMInfo> GetVMInfo()
-  {
-    std::vector<rumVMInfo> vVMInfo;
-    vVMInfo.reserve( g_cRegisteredVMs.size() );
-
-    for( const auto& iter : g_cRegisteredVMs )
-    {
-      rumVMInfo cInfo;
-      cInfo.m_strName = iter.second;
-      cInfo.m_bAttached = IsDebuggerAttached( iter.first );
-
-      vVMInfo.push_back( std::move( cInfo ) );
-    }
-
-    return vVMInfo;
   }
 
 
@@ -581,15 +594,7 @@ namespace rumDebugVM
 
   void RegisterVM( HSQUIRRELVM i_pcVM, const std::string& i_strName )
   {
-    auto iter{ g_cRegisteredVMs.find( i_pcVM ) };
-    if( iter == g_cRegisteredVMs.end() )
-    {
-      g_cRegisteredVMs.insert( std::pair( i_pcVM, i_strName ) );
-    }
-    else
-    {
-      iter->second = i_strName;
-    }
+    AttachVM( i_pcVM, i_strName );
   }
 
 
@@ -738,7 +743,12 @@ namespace rumDebugVM
                                             std::string( cStackInfos.funcname ) } );
     }
 
-    g_pcCurrentVM = i_pcVM;
+    auto iter{ std::find( g_cDebugContexts.begin(), g_cDebugContexts.end(), i_pcVM ) };
+    if( iter != g_cDebugContexts.end() )
+    {
+      g_pcCurrentDebugContext = &*iter;
+    }
+
     g_uiLocalVariableStackLevel = 0;
 
     do

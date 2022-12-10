@@ -12,12 +12,12 @@ using HSQUIRRELCONSTVM = SQVM const*;
 
 struct rumDebugContext
 {
-  rumDebugContext( HSQUIRRELVM i_pVM ) : m_pVM( i_pVM )
+  rumDebugContext( HSQUIRRELVM i_pcVM ) : m_pcVM( i_pcVM )
   {}
 
-  bool operator==( HSQUIRRELCONSTVM i_pVM ) const
+  bool operator==( HSQUIRRELCONSTVM i_pcVM ) const
   {
-    return( m_pVM == i_pVM );
+    return( m_pcVM == i_pcVM );
   }
 
   enum class StepDirective
@@ -35,6 +35,12 @@ struct rumDebugContext
     std::string m_strFunction;
   };
 
+  // A pointer to the VM
+  HSQUIRRELVM m_pcVM{ nullptr };
+
+  // A friendly name for the context
+  std::string m_strName;
+
   // The last known callstack
   std::vector<CallstackEntry> m_vCallstack;
 
@@ -50,6 +56,9 @@ struct rumDebugContext
   // The last known stack level when a step directive was issued
   uint32_t m_uiStepDirectiveStackLevel{ 0 };
 
+  // Whether or not the context is attached or detached
+  bool m_bAttached{ false };
+
   // Whether or not the VM is paused
   bool m_bPaused{ false };
 
@@ -58,9 +67,4 @@ struct rumDebugContext
 
   // Has there been a variable request or stack level change?
   bool m_bUpdateVariables{ false };
-
-private:
-
-  // A pointer to the VM
-  HSQUIRRELVM m_pVM{ nullptr };
 };
