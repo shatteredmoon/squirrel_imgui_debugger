@@ -36,18 +36,18 @@ SOFTWARE.
 
 namespace rumDebugUtility
 {
-  std::string BuildInstanceDescription( HSQUIRRELVM i_pVM, bool i_bValuesAsHex )
+  std::string BuildInstanceDescription( HSQUIRRELVM i_pcVM, bool i_bValuesAsHex )
   {
 #if DEBUG_OUTPUT
-    SQInteger iTopBegin{ sq_gettop( i_pVM ) };
+    SQInteger iTopBegin{ sq_gettop( i_pcVM ) };
 #endif
 
     HSQOBJECT sqInstance;
-    sq_getstackobj( i_pVM, -1, &sqInstance );
+    sq_getstackobj( i_pcVM, -1, &sqInstance );
     if( !sq_isinstance( sqInstance ) )
     {
 #if DEBUG_OUTPUT
-      SQInteger iTopEnd{ sq_gettop( i_pVM ) };
+      SQInteger iTopEnd{ sq_gettop( i_pcVM ) };
       assert( iTopBegin == iTopEnd );
 #endif
 
@@ -57,12 +57,12 @@ namespace rumDebugUtility
     std::string strDesc;
 
     // Get the class of the instance so that we can iterate over its member keys
-    sq_getclass( i_pVM, -1 );
+    sq_getclass( i_pcVM, -1 );
 
     HSQOBJECT sqClass;
-    sq_getstackobj( i_pVM, -1, &sqClass );
+    sq_getstackobj( i_pcVM, -1, &sqClass );
 
-    std::string strName{ GetObjectName( i_pVM, sqClass ) };
+    std::string strName{ GetObjectName( i_pcVM, sqClass ) };
     if( !strName.empty() )
     {
       strDesc = '<' + strName + ">\n";
@@ -73,10 +73,10 @@ namespace rumDebugUtility
     do
     {
       // Push iteration index
-      sq_pushinteger( i_pVM, iIndex );
+      sq_pushinteger( i_pcVM, iIndex );
 
       // Get the next member
-      bSuccess = SQ_SUCCEEDED( sq_next( i_pVM, -2 ) );
+      bSuccess = SQ_SUCCEEDED( sq_next( i_pcVM, -2 ) );
       if( bSuccess )
       {
         if( 0 != iIndex )
@@ -86,46 +86,46 @@ namespace rumDebugUtility
 
         // Get the member value
         HSQOBJECT sqValue;
-        sq_getstackobj( i_pVM, -1, &sqValue );
+        sq_getstackobj( i_pcVM, -1, &sqValue );
 
         // Get the member key
         HSQOBJECT sqKey;
-        sq_getstackobj( i_pVM, -2, &sqKey );
+        sq_getstackobj( i_pcVM, -2, &sqKey );
 
         // Get the next iteration index
-        sq_getinteger( i_pVM, -3, &iIndex );
+        sq_getinteger( i_pcVM, -3, &iIndex );
 
-        sq_pop( i_pVM, 3 );
+        sq_pop( i_pcVM, 3 );
 
         // Put the instance and the desired key on the stack
-        sq_pushobject( i_pVM, sqInstance );
-        sq_pushstring( i_pVM, sq_objtostring( &sqKey ), -1 );
+        sq_pushobject( i_pcVM, sqInstance );
+        sq_pushstring( i_pcVM, sq_objtostring( &sqKey ), -1 );
 
-        strDesc += FormatVariable( i_pVM, -1, i_bValuesAsHex );
+        strDesc += FormatVariable( i_pcVM, -1, i_bValuesAsHex );
 
         // Get the object from the table
         HSQOBJECT slotObj;
-        sq_get( i_pVM, -2 );
-        sq_getstackobj( i_pVM, -1, &slotObj );
+        sq_get( i_pcVM, -2 );
+        sq_getstackobj( i_pcVM, -1, &slotObj );
 
-        std::string strValue{ FormatVariable( i_pVM, -1, i_bValuesAsHex ) };
+        std::string strValue{ FormatVariable( i_pcVM, -1, i_bValuesAsHex ) };
 
         // Pop the fetched object
-        sq_poptop( i_pVM );
+        sq_poptop( i_pcVM );
 
         // Copy the key name
         strDesc += ": " + strValue;
       }
 
       // Pop the iterator index
-      sq_poptop( i_pVM );
+      sq_poptop( i_pcVM );
     } while( bSuccess );
 
     // Pop the fetched class
-    sq_poptop( i_pVM );
+    sq_poptop( i_pcVM );
 
 #if DEBUG_OUTPUT
-    SQInteger iTopEnd{ sq_gettop( i_pVM ) };
+    SQInteger iTopEnd{ sq_gettop( i_pcVM ) };
     assert( iTopBegin == iTopEnd );
 #endif
 
@@ -133,42 +133,42 @@ namespace rumDebugUtility
   }
 
 
-  std::string BuildTableDescription( HSQUIRRELVM i_pVM, bool i_bValuesAsHex )
+  std::string BuildTableDescription( HSQUIRRELVM i_pcVM, bool i_bValuesAsHex )
   {
     std::string strDesc;
 
 #if DEBUG_OUTPUT
-    SQInteger iTopBegin{ sq_gettop( i_pVM ) };
+    SQInteger iTopBegin{ sq_gettop( i_pcVM ) };
 #endif
 
     HSQOBJECT sqObject;
-    sq_getstackobj( i_pVM, -1, &sqObject );
-    std::string strName{ GetObjectName( i_pVM, sqObject ) };
+    sq_getstackobj( i_pcVM, -1, &sqObject );
+    std::string strName{ GetObjectName( i_pcVM, sqObject ) };
     if( !strName.empty() )
     {
       strDesc = '<' + strName + ">\n";
     }
 
     // For now, skip over large tables
-    const auto iSize{ sq_getsize( i_pVM, -1 ) };
+    const auto iSize{ sq_getsize( i_pcVM, -1 ) };
     if( iSize < 100 )
     {
       using TableEntry = std::pair<std::string, SQInteger>;
       std::vector<TableEntry> vTableEntries;
 
       SQInteger iIndex{ 0 };
-      sq_pushinteger( i_pVM, iIndex );
+      sq_pushinteger( i_pcVM, iIndex );
 
       for( SQInteger i = 0;
-           SQ_SUCCEEDED( sq_getinteger( i_pVM, -1, &iIndex ) ) && SQ_SUCCEEDED( sq_next( i_pVM, -2 ) );
+           SQ_SUCCEEDED( sq_getinteger( i_pcVM, -1, &iIndex ) ) && SQ_SUCCEEDED( sq_next( i_pcVM, -2 ) );
            ++i )
       {
-        sq_poptop( i_pVM );
-        vTableEntries.emplace_back( TableEntry{ FormatVariable( i_pVM, -1, i_bValuesAsHex ), iIndex } );
-        sq_poptop( i_pVM );
+        sq_poptop( i_pcVM );
+        vTableEntries.emplace_back( TableEntry{ FormatVariable( i_pcVM, -1, i_bValuesAsHex ), iIndex } );
+        sq_poptop( i_pcVM );
       }
 
-      sq_poptop( i_pVM );
+      sq_poptop( i_pcVM );
 
       /*std::sort(vTableEntries.begin(), vTableEntries.end(),
                  []( const TableEntry& lhs, const TableEntry& rhs ) -> bool
@@ -179,17 +179,17 @@ namespace rumDebugUtility
       int32_t iCount{ 0 };
       for( const auto& iter : vTableEntries )
       {
-        sq_pushinteger( i_pVM, iter.second );
-        if( !SQ_SUCCEEDED( sq_next( i_pVM, -2 ) ) )
+        sq_pushinteger( i_pcVM, iter.second );
+        if( !SQ_SUCCEEDED( sq_next( i_pcVM, -2 ) ) )
         {
-          sq_poptop( i_pVM );
+          sq_poptop( i_pcVM );
           break;
         }
 
-        const auto strValue{ FormatVariable( i_pVM, -1, i_bValuesAsHex ) };
+        const auto strValue{ FormatVariable( i_pcVM, -1, i_bValuesAsHex ) };
         if( strValue.empty() )
         {
-          sq_pop( i_pVM, 2 );
+          sq_pop( i_pcVM, 2 );
         }
         else
         {
@@ -198,12 +198,12 @@ namespace rumDebugUtility
             strDesc += "\n";
           }
 
-          sq_poptop( i_pVM );
-          strDesc += FormatVariable( i_pVM, -1, i_bValuesAsHex ) + ": " + strValue;
-          sq_poptop( i_pVM );
+          sq_poptop( i_pcVM );
+          strDesc += FormatVariable( i_pcVM, -1, i_bValuesAsHex ) + ": " + strValue;
+          sq_poptop( i_pcVM );
         }
 
-        sq_poptop( i_pVM );
+        sq_poptop( i_pcVM );
 
         ++iCount;
       }
@@ -214,7 +214,7 @@ namespace rumDebugUtility
     }
 
 #if DEBUG_OUTPUT
-    SQInteger iTopEnd{ sq_gettop( i_pVM ) };
+    SQInteger iTopEnd{ sq_gettop( i_pcVM ) };
     assert( iTopBegin == iTopEnd );
 #endif
 
@@ -222,13 +222,13 @@ namespace rumDebugUtility
   }
 
 
-  SQObject FindSymbol( HSQUIRRELVM i_pVM, const std::string& i_strVariable, uint32_t i_iLocalStackLevel )
+  SQObject FindSymbol( HSQUIRRELVM i_pcVM, const std::string& i_strVariable, uint32_t i_iLocalStackLevel )
   {
     SQObject sqObject{};
 
-    SQInteger iTop{ sq_gettop( i_pVM ) };
+    SQInteger iTop{ sq_gettop( i_pcVM ) };
 
-    sq_pushroottable( i_pVM );
+    sq_pushroottable( i_pcVM );
 
     // First, check to see if this is a class/instance variable with a member
     size_t szDotPosition{ i_strVariable.find( '.' ) };
@@ -238,92 +238,92 @@ namespace rumDebugUtility
       std::string strMember{ i_strVariable.substr( szDotPosition + 1 ) };
 
       // Fetch the class/instance from the root table
-      sq_pushstring( i_pVM, _SC( strClass.c_str() ), -1 );
-      if( SQ_SUCCEEDED( sq_get( i_pVM, -2 ) ) )
+      sq_pushstring( i_pcVM, _SC( strClass.c_str() ), -1 );
+      if( SQ_SUCCEEDED( sq_get( i_pcVM, -2 ) ) )
       {
-        sq_getstackobj( i_pVM, -1, &sqObject );
+        sq_getstackobj( i_pcVM, -1, &sqObject );
 
         // Fetch the class/instance member
-        sq_pushstring( i_pVM, _SC( strMember.c_str() ), -1 );
-        if( SQ_SUCCEEDED( sq_get( i_pVM, -2 ) ) )
+        sq_pushstring( i_pcVM, _SC( strMember.c_str() ), -1 );
+        if( SQ_SUCCEEDED( sq_get( i_pcVM, -2 ) ) )
         {
-          sq_getstackobj( i_pVM, -1, &sqObject );
+          sq_getstackobj( i_pcVM, -1, &sqObject );
         }
       }
       else
       {
         // Not found in the root table, so check locals
         int32_t iIndex{ 0 };
-        const SQChar* strName{ sq_getlocal( i_pVM, i_iLocalStackLevel, iIndex++ ) };
+        const SQChar* strName{ sq_getlocal( i_pcVM, i_iLocalStackLevel, iIndex++ ) };
         while( strName )
         {
-          SQObjectType eType{ sq_gettype( i_pVM, -1 ) };
+          SQObjectType eType{ sq_gettype( i_pcVM, -1 ) };
           if( ( ( eType == OT_CLASS ) || ( eType == OT_INSTANCE ) ) && ( strClass.compare( strName ) == 0 ) )
           {
             // A matching class/instance was found, so try to fetch the member
-            sq_pushstring( i_pVM, _SC( strMember.c_str() ), -1 );
-            if( SQ_SUCCEEDED( sq_get( i_pVM, -2 ) ) )
+            sq_pushstring( i_pcVM, _SC( strMember.c_str() ), -1 );
+            if( SQ_SUCCEEDED( sq_get( i_pcVM, -2 ) ) )
             {
-              sq_getstackobj( i_pVM, -1, &sqObject );
-              sq_poptop( i_pVM );
+              sq_getstackobj( i_pcVM, -1, &sqObject );
+              sq_poptop( i_pcVM );
             }
 
-            sq_poptop( i_pVM );
+            sq_poptop( i_pcVM );
           }
 
-          sq_poptop( i_pVM );
+          sq_poptop( i_pcVM );
 
-          strName = sq_getlocal( i_pVM, i_iLocalStackLevel, iIndex++ );
+          strName = sq_getlocal( i_pcVM, i_iLocalStackLevel, iIndex++ );
         }
       }
     }
     else
     {
       // Check the root table
-      sq_pushstring( i_pVM, _SC( i_strVariable.c_str() ), -1 );
-      if( SQ_SUCCEEDED( sq_get( i_pVM, -2 ) ) )
+      sq_pushstring( i_pcVM, _SC( i_strVariable.c_str() ), -1 );
+      if( SQ_SUCCEEDED( sq_get( i_pcVM, -2 ) ) )
       {
-        sq_getstackobj( i_pVM, -1, &sqObject );
+        sq_getstackobj( i_pcVM, -1, &sqObject );
       }
       else
       {
         // Fetch the const table
-        sq_pushconsttable( i_pVM );
-        sq_getstackobj( i_pVM, -1, &sqObject );
-        sq_pop( i_pVM, 1 );
+        sq_pushconsttable( i_pcVM );
+        sq_getstackobj( i_pcVM, -1, &sqObject );
+        sq_pop( i_pcVM, 1 );
 
         // Push the const table and desired string
-        sq_pushobject( i_pVM, sqObject );
-        sq_pushstring( i_pVM, _SC( i_strVariable.c_str() ), -1 );
+        sq_pushobject( i_pcVM, sqObject );
+        sq_pushstring( i_pcVM, _SC( i_strVariable.c_str() ), -1 );
 
         // Fetch the result
-        sq_get( i_pVM, -2 );
-        sq_getstackobj( i_pVM, -1, &sqObject );
-        sq_pop( i_pVM, 2 );
+        sq_get( i_pcVM, -2 );
+        sq_getstackobj( i_pcVM, -1, &sqObject );
+        sq_pop( i_pcVM, 2 );
       }
     }
 
-    sq_settop( i_pVM, iTop );
+    sq_settop( i_pcVM, iTop );
 
     return sqObject;
   }
 
 
-  std::string FormatVariable( HSQUIRRELVM i_pVM, const SQInteger i_iIndex, bool i_bValuesAsHex )
+  std::string FormatVariable( HSQUIRRELVM i_pcVM, const SQInteger i_iIndex, bool i_bValuesAsHex )
   {
     std::string strVariable;
 
 #if DEBUG_OUTPUT
-    SQInteger iTopBegin{ sq_gettop( i_pVM ) };
+    SQInteger iTopBegin{ sq_gettop( i_pcVM ) };
 #endif
 
-    const auto eType{ sq_gettype( i_pVM, i_iIndex ) };
+    const auto eType{ sq_gettype( i_pcVM, i_iIndex ) };
     switch( eType )
     {
       case OT_BOOL:
       {
         SQBool b;
-        sq_getbool( i_pVM, i_iIndex, &b );
+        sq_getbool( i_pcVM, i_iIndex, &b );
         strVariable = b ? "true" : "false";
         break;
       }
@@ -331,22 +331,22 @@ namespace rumDebugUtility
       case OT_ARRAY:
       case OT_CLASS:
       case OT_TABLE:
-        strVariable = BuildTableDescription( i_pVM, i_bValuesAsHex );
+        strVariable = BuildTableDescription( i_pcVM, i_bValuesAsHex );
         break;
 
       case OT_INSTANCE:
-        strVariable = BuildInstanceDescription( i_pVM, i_bValuesAsHex );
+        strVariable = BuildInstanceDescription( i_pcVM, i_bValuesAsHex );
         break;
 
       case OT_CLOSURE:
       {
-        if( SQ_SUCCEEDED( sq_getclosurename( i_pVM, i_iIndex ) ) )
+        if( SQ_SUCCEEDED( sq_getclosurename( i_pcVM, i_iIndex ) ) )
         {
           const ::SQChar* strVal = nullptr;
-          if( SQ_SUCCEEDED( sq_getstring( i_pVM, i_iIndex, &strVal ) ) )
+          if( SQ_SUCCEEDED( sq_getstring( i_pcVM, i_iIndex, &strVal ) ) )
           {
             strVariable = strVal ? strVal : "<anonymous closure>";
-            sq_poptop( i_pVM );
+            sq_poptop( i_pcVM );
           }
         }
         else
@@ -356,7 +356,7 @@ namespace rumDebugUtility
 
         SQUnsignedInteger iParams{ 0 };
         SQUnsignedInteger iFreeVars{ 0 };
-        if( SQ_SUCCEEDED( sq_getclosureinfo( i_pVM, i_iIndex, &iParams, &iFreeVars ) ) )
+        if( SQ_SUCCEEDED( sq_getclosureinfo( i_pcVM, i_iIndex, &iParams, &iFreeVars ) ) )
         {
           strVariable += "(" + std::to_string( iParams ) + " params)";
         }
@@ -366,7 +366,7 @@ namespace rumDebugUtility
       case OT_FLOAT:
       {
         SQFloat f;
-        sq_getfloat( i_pVM, i_iIndex, &f );
+        sq_getfloat( i_pcVM, i_iIndex, &f );
         strVariable = std::to_string( f );
         break;
       }
@@ -374,7 +374,7 @@ namespace rumDebugUtility
       case OT_INTEGER:
       {
         SQInteger i;
-        sq_getinteger( i_pVM, i_iIndex, &i );
+        sq_getinteger( i_pcVM, i_iIndex, &i );
         if( i_bValuesAsHex )
         {
           static char strHighBuffer[20] = { '0', 'x', '\0' };
@@ -411,7 +411,7 @@ namespace rumDebugUtility
       case OT_STRING:
       {
         const SQChar* s;
-        sq_getstring( i_pVM, i_iIndex, &s );
+        sq_getstring( i_pcVM, i_iIndex, &s );
         strVariable = s;
         break;
       }
@@ -422,7 +422,7 @@ namespace rumDebugUtility
     }
 
 #if DEBUG_OUTPUT
-    SQInteger iTopEnd{ sq_gettop( i_pVM ) };
+    SQInteger iTopEnd{ sq_gettop( i_pcVM ) };
     assert( iTopBegin == iTopEnd );
 #endif
 
@@ -430,18 +430,18 @@ namespace rumDebugUtility
   }
 
 
-  std::string FormatVariable( HSQUIRRELVM i_pVM, HSQOBJECT i_sqObject, bool i_bValuesAsHex )
+  std::string FormatVariable( HSQUIRRELVM i_pcVM, HSQOBJECT i_sqObject, bool i_bValuesAsHex )
   {
 #if DEBUG_OUTPUT
-    SQInteger iTopBegin{ sq_gettop( i_pVM ) };
+    SQInteger iTopBegin{ sq_gettop( i_pcVM ) };
 #endif
 
-    sq_pushobject( i_pVM, i_sqObject );
-    std::string strVariable{ FormatVariable( i_pVM, -1, i_bValuesAsHex ) };
-    sq_poptop( i_pVM );
+    sq_pushobject( i_pcVM, i_sqObject );
+    std::string strVariable{ FormatVariable( i_pcVM, -1, i_bValuesAsHex ) };
+    sq_poptop( i_pcVM );
 
 #if DEBUG_OUTPUT
-    SQInteger iTopEnd{ sq_gettop( i_pVM ) };
+    SQInteger iTopEnd{ sq_gettop( i_pcVM ) };
     assert( iTopBegin == iTopEnd );
 #endif
 
@@ -449,7 +449,7 @@ namespace rumDebugUtility
   }
 
 
-  std::string GetObjectName( HSQUIRRELVM i_pVM, HSQOBJECT i_sqObject )
+  std::string GetObjectName( HSQUIRRELVM i_pcVM, HSQOBJECT i_sqObject )
   {
     // TODO - the hash value for found entries could be cached, but performance isn't really a requirement here
 
@@ -460,25 +460,25 @@ namespace rumDebugUtility
     }
 
 #if DEBUG_OUTPUT
-    SQInteger iTop{ sq_gettop( i_pVM ) };
+    SQInteger iTop{ sq_gettop( i_pcVM ) };
 #endif
 
     std::string strName;
 
-    sq_pushobject( i_pVM, i_sqObject );
-    const auto iObjectHash{ sq_gethash( i_pVM, -1 ) };
-    sq_poptop( i_pVM );
+    sq_pushobject( i_pcVM, i_sqObject );
+    const auto iObjectHash{ sq_gethash( i_pcVM, -1 ) };
+    sq_poptop( i_pcVM );
 
-    sq_pushroottable( i_pVM );
-    const auto iRootTableHash{ sq_gethash( i_pVM, -1 ) };
+    sq_pushroottable( i_pcVM );
+    const auto iRootTableHash{ sq_gethash( i_pcVM, -1 ) };
 
     // Early out if this is the root table
     if( iRootTableHash == iObjectHash )
     {
-      sq_poptop( i_pVM );
+      sq_poptop( i_pcVM );
 
 #if DEBUG_OUTPUT
-      SQInteger iTopEnd{ sq_gettop( i_pVM ) };
+      SQInteger iTopEnd{ sq_gettop( i_pcVM ) };
       assert( iTop == iTopEnd );
 #endif
 
@@ -492,38 +492,38 @@ namespace rumDebugUtility
 
     do
     {
-      sq_pushinteger( i_pVM, iIndex );
+      sq_pushinteger( i_pcVM, iIndex );
 
       // Iterate
-      bSuccess = SQ_SUCCEEDED( sq_next( i_pVM, -2 ) );
+      bSuccess = SQ_SUCCEEDED( sq_next( i_pcVM, -2 ) );
       if( bSuccess )
       {
         // The object value is at position -1, so get its hash
-        const auto iIterHash{ sq_gethash( i_pVM, -1 ) };
+        const auto iIterHash{ sq_gethash( i_pcVM, -1 ) };
         if( iObjectHash == iIterHash )
         {
           // Get the entry's key
           HSQOBJECT sqKey;
-          sq_getstackobj( i_pVM, -2, &sqKey );
+          sq_getstackobj( i_pcVM, -2, &sqKey );
           strName = sq_objtostring( &sqKey );
         }
 
         // Next iteration index
-        sq_getinteger( i_pVM, -3, &iIndex );
+        sq_getinteger( i_pcVM, -3, &iIndex );
 
         // Pop the key and value
-        sq_pop( i_pVM, 2 );
+        sq_pop( i_pcVM, 2 );
       }
 
       // Pop the iterator index
-      sq_poptop( i_pVM );
+      sq_poptop( i_pcVM );
     } while( bSuccess && strName.empty() );
 
     // Pop the root table
-    sq_poptop( i_pVM );
+    sq_poptop( i_pcVM );
 
 #if DEBUG_OUTPUT
-    SQInteger iTopEnd{ sq_gettop( i_pVM ) };
+    SQInteger iTopEnd{ sq_gettop( i_pcVM ) };
     assert( iTop == iTopEnd );
 #endif
 

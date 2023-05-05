@@ -98,7 +98,7 @@ namespace rumDebugVM
 
   // The VM must be registered by name in order to use these
   void AttachVM( const std::string& i_strName );
-  void AttachVM( HSQUIRRELVM i_pVM, const std::string& i_strName );
+  void AttachVM( HSQUIRRELVM i_pcVM, const std::string& i_strName );
   void DetachVM( const std::string& i_strName );
 
   void BuildLocalVariables( HSQUIRRELVM i_pcVM, int32_t i_StackLevel );
@@ -368,6 +368,7 @@ namespace rumDebugVM
 
       size_t szLastOffset{ 0 };
       size_t szCurrentOffset{ 0 };
+      size_t uiLongestLine{ rumDebugFile::s_uiMinimumColumns };
 
       bool bInMultilineComment{ false };
       uint32_t iMultilineCommentStart{ 0 };
@@ -379,6 +380,8 @@ namespace rumDebugVM
         cFile.m_vStringOffsets[++index] = ++szCurrentOffset;
 
         std::string_view strLine{ std::string_view( cFile.m_strData ).substr( szLastOffset, szCurrentOffset - szLastOffset ) };
+        const size_t uiLineLength{ strLine.size() };
+        uiLongestLine = { std::max( uiLineLength, uiLongestLine ) };
 
         // Parse multiline comment ranges
         if( !bInMultilineComment && strLine.find( "/*" ) != std::string::npos )
@@ -417,6 +420,7 @@ namespace rumDebugVM
       }
 
       cFile.m_vStringOffsets.resize( index + 1 );
+      cFile.m_uiLongestLine = uiLongestLine;
 
       g_cOpenedFiles.insert( std::make_pair( strFilePath, std::move( cFile ) ) );
       rumDebugInterface::RequestSettingsUpdate();

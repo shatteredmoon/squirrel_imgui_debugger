@@ -970,8 +970,11 @@ namespace rumDebugInterface
                                                  ImGuiTableFlags_NoSavedSettings };
           if( ImGui::BeginTable( "SourceCode", 2, eTableFlags ) )
           {
-            ImGui::TableSetupColumn( "Line", ImGuiTableColumnFlags_WidthFixed, ImGui::GetFontSize() * 3 );
-            ImGui::TableSetupColumn( "Source", ImGuiTableColumnFlags_WidthStretch, 0.0f );
+            static const float s_fCharacterWidth{ ImGui::CalcTextSize( "0" ).x };
+
+            ImGui::TableSetupColumn( "Line", ImGuiTableColumnFlags_WidthFixed, s_fCharacterWidth * 3 );
+            ImGui::TableSetupColumn( "Source", ImGuiTableColumnFlags_WidthFixed, s_fCharacterWidth * rcFile.m_uiLongestLine );
+            ImGui::TableSetupScrollFreeze( 1, 0 );
 
             size_t iNumLines{ rcFile.m_vStringOffsets.size() };
 

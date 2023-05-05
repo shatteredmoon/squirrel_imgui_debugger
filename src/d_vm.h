@@ -17,14 +17,14 @@
 
 namespace rumDebugVM
 {
-  SQInteger AttachVM( HSQUIRRELVM i_pVM );
-  SQInteger DetachVM( HSQUIRRELVM i_pVM );
+  SQInteger AttachVM( HSQUIRRELVM i_pcVM );
+  SQInteger DetachVM( HSQUIRRELVM i_pcVM );
 
   void BreakpointAdd( rumDebugBreakpoint i_cBreakpoint );
   void BreakpointRemove( const rumDebugBreakpoint& i_rcBreakpoint );
   void BreakpointToggle( const rumDebugBreakpoint& i_rcBreakpoint );
 
-  void EnableDebugInfo( HSQUIRRELVM i_pVM, bool i_bEnable = true );
+  void EnableDebugInfo( HSQUIRRELVM i_pcVM, bool i_bEnable = true );
 
   void FileOpen( const std::filesystem::path& i_fsFilePath, uint32_t i_uiLine );
   void FileClose( const std::filesystem::path& i_fsFilePath );
@@ -45,9 +45,9 @@ namespace rumDebugVM
   const std::vector<rumDebugVariable> GetWatchedVariablesCopy();
   const std::vector<rumDebugVariable>& GetWatchedVariablesRef();
 
-  SQInteger IsDebuggerAttached( HSQUIRRELVM i_pVM );
+  SQInteger IsDebuggerAttached( HSQUIRRELVM i_pcVM );
 
-  void RegisterVM( HSQUIRRELVM i_pVM, const std::string& i_strName );
+  void RegisterVM( HSQUIRRELVM i_pcVM, const std::string& i_strName );
 
   void RequestAttachVM( const std::string& i_strName );
   void RequestDetachVM( const std::string& i_strName );
