@@ -399,6 +399,7 @@ namespace rumDebugInterface
 
     // Add support for function keys
     rImGuiIO.KeyMap[ImGuiKey_G] = static_cast<int32_t>( CmdInput::eVirtualKeys::vkKeyboardA ) + ( ImGuiKey_G - ImGuiKey_A );
+    rImGuiIO.KeyMap[ImGuiKey_F] = static_cast<int32_t>( CmdInput::eVirtualKeys::vkKeyboardA ) + ( ImGuiKey_F - ImGuiKey_A );
     rImGuiIO.KeyMap[ImGuiKey_F5] = static_cast<int32_t>( CmdInput::eVirtualKeys::vkKeyboardSuperF1 ) + ( ImGuiKey_F5 - ImGuiKey_F1 );
     rImGuiIO.KeyMap[ImGuiKey_F9] = static_cast<int32_t>( CmdInput::eVirtualKeys::vkKeyboardSuperF1 ) + ( ImGuiKey_F9 - ImGuiKey_F1 );
     rImGuiIO.KeyMap[ImGuiKey_F10] = static_cast<int32_t>( CmdInput::eVirtualKeys::vkKeyboardSuperF1 ) + ( ImGuiKey_F10 - ImGuiKey_F1 );
@@ -655,9 +656,7 @@ namespace rumDebugInterface
             ImGui::TextUnformatted( iter.m_fsFilepath.filename().generic_string().c_str() );
             if( ImGui::IsItemHovered() )
             {
-              ImGui::BeginTooltip();
-              ImGui::TextUnformatted( iter.m_fsFilepath.generic_string().c_str() );
-              ImGui::EndTooltip();
+              ImGui::SetTooltip( iter.m_fsFilepath.generic_string().c_str() );
 
               if( ImGui::IsMouseDoubleClicked( ImGuiMouseButton_Left ) )
               {
@@ -925,8 +924,13 @@ namespace rumDebugInterface
   void UpdateSourceCode()
   {
     static ImU32 uiCurrentLineColor{ ImGui::GetColorU32( { 0.2f, 0.4f, 0.7f, 0.5f } ) };
+    static const ImU32 uiFindTextLineColor{ ImGui::GetColorU32( ImVec4( 1.0f, 1.0f, 0.0f, 0.5f ) ) };
 
-    ImGuiIO& rcIO{ ImGui::GetIO() };
+    static char strFindText[MAX_FILENAME_LENGTH];
+    static int32_t iFindFileOffset{ 0 };
+    static int32_t iFindLineOffset{ 0 };
+
+    const ImGuiIO& rcIO{ ImGui::GetIO() };
 
     if( ImGui::BeginTabBar( "OpenedFiles", ImGuiTabBarFlags_Reorderable | ImGuiTabBarFlags_FittingPolicyScroll ) )
     {
@@ -973,16 +977,90 @@ namespace rumDebugInterface
                                                  ImGuiTableFlags_NoSavedSettings };
           if( ImGui::BeginTable( "SourceCode", 2, eTableFlags ) )
           {
-            static const float s_fCharacterWidth{ ImGui::CalcTextSize( "0" ).x };
-
-            ImGui::TableSetupColumn( "Line", ImGuiTableColumnFlags_WidthFixed, s_fCharacterWidth * 3 );
-            ImGui::TableSetupColumn( "Source", ImGuiTableColumnFlags_WidthFixed, s_fCharacterWidth * rcFile.m_uiLongestLine );
+            ImGui::TableSetupColumn( "Line", ImGuiTableColumnFlags_WidthFixed, ImGui::GetFontSize() * 3.f );
+            ImGui::TableSetupColumn( "Source", ImGuiTableColumnFlags_WidthFixed, ImGui::GetFontSize() * rcFile.m_uiLongestLine );
             ImGui::TableSetupScrollFreeze( 1, 0 );
 
-            size_t iNumLines{ rcFile.m_vStringOffsets.size() };
-            const bool hasFocus{ ImGui::IsWindowFocused( ImGuiFocusedFlags_ChildWindows ) };
+            const int32_t iNumLines{ static_cast<int32_t>( rcFile.m_vStringOffsets.size() ) };
+            const bool bHasFocus{ ImGui::IsWindowFocused( ImGuiFocusedFlags_ChildWindows ) };
 
-            if( rcIO.KeyCtrl && ImGui::IsKeyPressed( ImGuiKey_G ) )
+            if( bHasFocus && ImGui::IsKeyPressed( ImGuiKey_Escape ) )
+            {
+              // Clear the existing find text results
+              strFindText[0] = '\0';
+              iFindFileOffset = 0;
+              iFindLineOffset = 0;
+            }
+
+            // #TODOJBW - Implement "Find Next" with F3
+            if( bHasFocus && rcIO.KeyCtrl && ImGui::IsKeyPressed( ImGuiKey_F ) )
+            {
+              ImGui::OpenPopup( "Find In File" );
+            }
+
+            constexpr ImVec2 buttonSize{ 120, 0 };
+
+            if( ImGui::BeginPopupModal( "Find In File", nullptr, ImGuiWindowFlags_AlwaysAutoResize ) )
+            {
+              ImGui::TextUnformatted( "Find:" );
+
+              if( !ImGui::IsAnyItemFocused() && !ImGui::IsAnyItemActive() && !ImGui::IsMouseClicked( 0 ) )
+              {
+                ImGui::SetKeyboardFocusHere( 0 );
+              }
+
+              ImGui::InputText( "##FindText", strFindText, IM_ARRAYSIZE( strFindText ) );
+
+              if( ImGui::Button( "OK", buttonSize ) ||
+                  ( bHasFocus && ( ImGui::IsKeyPressed( ImGuiKey_Enter ) ||
+                                   ImGui::IsKeyPressed( ImGuiKey_KeyPadEnter ) ) ) )
+              {
+                  // #TODOJBW - provide a more advanced implementation
+                if( iFindFileOffset >= static_cast<int32_t>( rcFile.m_strData.size() ) )
+                {
+                  iFindFileOffset = 0;
+                }
+
+                // #TODOJBW - implement case insensitive search
+                const auto findOffset{ rcFile.m_strData.find( strFindText, iFindFileOffset ) };
+                if( findOffset != std::string::npos )
+                {
+                  // Determine the line offset by counting the occurrences of \n up to the find index
+                  const std::string_view sourceCodeView{ rcFile.m_strData };
+                  const std::string_view sourceCodeSubstring{ sourceCodeView.substr( 0, findOffset ) };
+                  iFindLineOffset = static_cast<int32_t>( std::count( sourceCodeSubstring.begin(),
+                                                                      sourceCodeSubstring.end(),
+                                                                      '\n' ) + 1 );
+
+                  // Save the existing offset, but nudge it forward so that a consecutive find will
+                  // find the next occurrence of the string, not the one we're currently sitting at
+                  iFindFileOffset = static_cast<int32_t>( findOffset + 1 );
+                }
+                else
+                {
+                  // EOF
+                  iFindFileOffset = static_cast<int32_t>( rcFile.m_strData.size() );
+                  iFindLineOffset = iNumLines - 1;
+                }
+
+                g_fsFocusFile = rcFile.m_fsFilePath;
+                g_iFocusLine = iFindLineOffset;
+
+                ImGui::CloseCurrentPopup();
+              }
+
+              ImGui::SameLine();
+
+              if( ImGui::Button( "Cancel", buttonSize ) )
+              {
+                ImGui::CloseCurrentPopup();
+              }
+
+              // Find In File
+              ImGui::EndPopup();
+            }
+
+            if( bHasFocus && rcIO.KeyCtrl && ImGui::IsKeyPressed( ImGuiKey_G ) )
             {
               ImGui::OpenPopup( "Go To Line" );
             }
@@ -1000,9 +1078,9 @@ namespace rumDebugInterface
 
               ImGui::InputInt( "##GotoLine", &iGotoLine );
 
-              if( ImGui::Button( "OK", { 120, 0 } ) ||
-                  ( hasFocus && ( ImGui::IsKeyPressed( ImGuiKey_Enter ) ||
-                                  ImGui::IsKeyPressed( ImGuiKey_KeyPadEnter) ) ) )
+              if( ImGui::Button( "OK", buttonSize ) ||
+                  ( bHasFocus && ( ImGui::IsKeyPressed( ImGuiKey_Enter ) ||
+                                   ImGui::IsKeyPressed( ImGuiKey_KeyPadEnter ) ) ) )
               {
                 // Clamp the input values to the valid range
                 if( iGotoLine < 1 )
@@ -1020,11 +1098,12 @@ namespace rumDebugInterface
 
               ImGui::SameLine();
 
-              if( ImGui::Button( "Cancel", { 120, 0 } ) )
+              if( ImGui::Button( "Cancel", buttonSize ) )
               {
                 ImGui::CloseCurrentPopup();
               }
 
+              // Go To Line
               ImGui::EndPopup();
             }
 
@@ -1091,7 +1170,8 @@ namespace rumDebugInterface
 
                   if( ImGui::IsMouseHoveringRect( vItemRectMin, vItemRectMax ) )
                   {
-                    if( ImGui::IsKeyPressed( ImGuiKey_F9 ) || ImGui::IsMouseDoubleClicked( ImGuiMouseButton_Left ) )
+                    if( ( bHasFocus && ImGui::IsKeyPressed( ImGuiKey_F9 ) ) ||
+                        ImGui::IsMouseDoubleClicked( ImGuiMouseButton_Left ) )
                     {
                       rumDebugBreakpoint cBreakpoint( rcFile.m_fsFilePath, iLine );
                       rumDebugVM::BreakpointToggle( cBreakpoint );
@@ -1120,6 +1200,12 @@ namespace rumDebugInterface
                       ImGui::TableSetBgColor( ImGuiTableBgTarget_CellBg, uiCurrentLineColor );
                     }
 
+                    if( strFindText[0] != '\0' && ( iLine == iFindLineOffset ) )
+                    {
+                      // Highlight the line containing the string typed in the find dialog
+                      ImGui::TableSetBgColor( ImGuiTableBgTarget_CellBg, uiFindTextLineColor );
+                    }
+
                     ImGui::BeginGroup();
                     DisplayCode( strLine, iLine, bInMultilineComment );
                     ImGui::EndGroup();
@@ -1131,12 +1217,12 @@ namespace rumDebugInterface
 
                     if( ImGui::IsMouseHoveringRect( vItemRectMin, vItemRectMax ) )
                     {
-                      if( ImGui::IsKeyPressed( ImGuiKey_F9 ) )
+                      if( bHasFocus && ImGui::IsKeyPressed( ImGuiKey_F9 ) )
                       {
                         rumDebugBreakpoint cBreakpoint{ rcFile.m_fsFilePath, static_cast<uint32_t>( iLine ) };
                         rumDebugVM::BreakpointToggle( cBreakpoint );
                       }
-                      else if( ImGui::IsKeyPressed( ImGuiKey_Delete ) )
+                      else if( bHasFocus && ImGui::IsKeyPressed( ImGuiKey_Delete ) )
                       {
                         rumDebugBreakpoint cBreakpoint{ rcFile.m_fsFilePath, static_cast<uint32_t>( iLine ) };
                         rumDebugVM::BreakpointRemove( cBreakpoint );
