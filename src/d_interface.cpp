@@ -932,6 +932,63 @@ namespace rumDebugInterface
 
     const ImGuiIO& rcIO{ ImGui::GetIO() };
 
+    const auto pcDebugContext{ rumDebugVM::GetCurrentDebugContext() };
+
+    if( pcDebugContext )
+    {
+      if( pcDebugContext->m_bPaused )
+      {
+        const bool bHasFocus{ ImGui::IsWindowFocused( ImGuiFocusedFlags_ChildWindows ) };
+
+        // Provide suspended context control buttons so that the user can resume or step as needed
+        if( ( bHasFocus && ImGui::IsKeyPressed( ImGuiKey_F5 ) ) || ImGui::Button( "Resume" ) )
+        {
+          rumDebugVM::RequestResume();
+        }
+
+        if( ImGui::IsItemHovered() )
+        {
+          ImGui::SetTooltip( "F5" );
+        }
+
+        ImGui::SameLine();
+
+        if( ( bHasFocus && ImGui::IsKeyPressed( ImGuiKey_F10 ) ) || ImGui::Button( "Step Over" ) )
+        {
+          rumDebugVM::RequestStepOver();
+        }
+
+        if( ImGui::IsItemHovered() )
+        {
+          ImGui::SetTooltip( "F10" );
+        }
+
+        ImGui::SameLine();
+
+        if( ( bHasFocus && ImGui::IsKeyPressed( ImGuiKey_F11 ) ) || ImGui::Button( "Step Into" ) )
+        {
+          rumDebugVM::RequestStepInto();
+        }
+
+        if( ImGui::IsItemHovered() )
+        {
+          ImGui::SetTooltip( "F11" );
+        }
+
+        ImGui::SameLine();
+
+        if( ( bHasFocus && rcIO.KeyShift && ImGui::IsKeyPressed( ImGuiKey_F11 ) ) || ImGui::Button( "Step Out" ) )
+        {
+          rumDebugVM::RequestStepOut();
+        }
+
+        if( ImGui::IsItemHovered( ImGuiHoveredFlags_AllowWhenDisabled ) )
+        {
+          ImGui::SetTooltip( "Shift+F11" );
+        }
+      }
+    }
+
     if( ImGui::BeginTabBar( "OpenedFiles", ImGuiTabBarFlags_Reorderable | ImGuiTabBarFlags_FittingPolicyScroll ) )
     {
       // Fetch by copy here because there is potential to modify the list during iteration
@@ -1015,7 +1072,7 @@ namespace rumDebugInterface
                   ( bHasFocus && ( ImGui::IsKeyPressed( ImGuiKey_Enter ) ||
                                    ImGui::IsKeyPressed( ImGuiKey_KeyPadEnter ) ) ) )
               {
-                  // #TODOJBW - provide a more advanced implementation
+                // #TODOJBW - provide a more advanced implementation
                 if( iFindFileOffset >= static_cast<int32_t>( rcFile.m_strData.size() ) )
                 {
                   iFindFileOffset = 0;
