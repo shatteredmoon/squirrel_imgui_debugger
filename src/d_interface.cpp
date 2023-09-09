@@ -81,7 +81,7 @@ namespace rumDebugInterface
 
   void DoVariableExpansion( const rumDebugVariable& i_rcVariable );
 
-  size_t FindNthOccurrence( const std::string& i_strSource, const std::string& i_strFind,
+  size_t FindNthOccurrence( const std::string_view i_strSource, const std::string_view i_strFind,
                             size_t i_szOccurence, size_t i_szOffset = 0 );
 
   rumDebugVariable GetVariable( const std::string& i_strName );
@@ -152,7 +152,7 @@ namespace rumDebugInterface
       ImGui::OpenPopup( i_rcDebugVariable.m_strName.c_str() );
     }
 
-    ImGui::SetNextWindowSize( { 200, 300 }, ImGuiCond_FirstUseEver );
+    ImGui::SetNextWindowSize( { 200.0f, 300.0f }, ImGuiCond_FirstUseEver );
     if( ImGui::BeginPopupModal( i_rcDebugVariable.m_strName.c_str(), nullptr,
                                 ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_HorizontalScrollbar ) )
     {
@@ -176,7 +176,7 @@ namespace rumDebugInterface
   }
 
 
-  size_t FindNthOccurrence( const std::string& i_strSource, const std::string& i_strFind,
+  size_t FindNthOccurrence( const std::string_view i_strSource, const std::string_view i_strFind,
                             size_t i_szOccurence, size_t i_szOffset )
   {
     size_t szPos = i_strSource.find( i_strFind, i_szOffset );
@@ -293,7 +293,8 @@ namespace rumDebugInterface
               ImGui::BeginTooltip();
               constexpr ImGuiTableFlags eTableFlags{ ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_Borders |
                                                      ImGuiTableFlags_NoSavedSettings };
-              if( ImGui::BeginTable( "LocalsTable", 3, eTableFlags ) )
+              constexpr int32_t iNumColumns{ 3 };
+              if( ImGui::BeginTable( "LocalsTable", iNumColumns, eTableFlags ) )
               {
                 DisplayVariable( cVariable );
                 ImGui::EndTable();
@@ -339,13 +340,13 @@ namespace rumDebugInterface
   }
 
 
-  rumDebugVariable GetVariable( const std::string& i_strName )
+  rumDebugVariable GetVariable( const std::string& i_strVariableName )
   {
     rumDebugVariable cVariable;
 
     // Check local variables
     const auto& rcvLocalVariables{ rumDebugVM::GetLocalVariablesRef() };
-    const auto& localIter{ std::find( rcvLocalVariables.begin(), rcvLocalVariables.end(), i_strName ) };
+    const auto& localIter{ std::find( rcvLocalVariables.begin(), rcvLocalVariables.end(), i_strVariableName ) };
     if( localIter != rcvLocalVariables.end() )
     {
       cVariable = *localIter;
@@ -354,7 +355,7 @@ namespace rumDebugInterface
     {
       // Check watched variables
       const auto& rcvWatchedVariables{ rumDebugVM::GetWatchedVariablesRef() };
-      const auto& watchIter{ std::find( rcvWatchedVariables.begin(), rcvWatchedVariables.end(), i_strName ) };
+      const auto& watchIter{ std::find( rcvWatchedVariables.begin(), rcvWatchedVariables.end(), i_strVariableName ) };
       if( watchIter != rcvWatchedVariables.end() )
       {
         cVariable = *watchIter;
@@ -363,14 +364,14 @@ namespace rumDebugInterface
       {
         // Check the recently requested variables
         const auto& rcvRequestedVariables{ rumDebugVM::GetRequestedVariablesRef() };
-        const auto& requestedIter{ std::find( rcvRequestedVariables.begin(), rcvRequestedVariables.end(), i_strName ) };
+        const auto& requestedIter{ std::find( rcvRequestedVariables.begin(), rcvRequestedVariables.end(), i_strVariableName ) };
         if( requestedIter != rcvRequestedVariables.end() )
         {
           cVariable = *requestedIter;
         }
         else
         {
-          cVariable.m_strName = i_strName;
+          cVariable.m_strName = i_strVariableName;
           rumDebugVM::RequestVariable( cVariable );
         }
       }
@@ -462,8 +463,9 @@ namespace rumDebugInterface
     }
     else if( strLine.find_first_of( "File" ) == 0 )
     {
+      constexpr int32_t iFocusLineNumber{ 0 };
       std::filesystem::path fsFilePath{ strLine.substr( strLine.find_first_of( "=" ) + 1 ) };
-      rumDebugVM::FileOpen( fsFilePath, 0 );
+      rumDebugVM::FileOpen( fsFilePath, iFocusLineNumber );
     }
     else if( strLine.find_first_of( "WatchVariable" ) == 0 )
     {
@@ -560,18 +562,26 @@ namespace rumDebugInterface
 
     NetImgui::NewFrame();
 
+    constexpr float fMaxWindowWidth{ 3840.0f };
+    constexpr float fMaxWindowHeight{ 2160.0f };
+    constexpr float fMinWindowWidth{ 800.0f };
+    constexpr float fMinWindowHeight{ 600.0f };
+
+    ImGui::SetNextWindowSizeConstraints( { fMinWindowWidth, fMinWindowHeight }, { fMaxWindowWidth, fMaxWindowHeight } );
+
     static bool bOpen{ true };
     if( ImGui::Begin( "Script Debugger", &bOpen, ImGuiWindowFlags_NoScrollbar ) )
     {
       // A table split by variable inspection, breakpoints, and callstack
-      if( ImGui::BeginTable( "MainTable", 1, ImGuiTableFlags_None ) )
+      constexpr int32_t numColumns{ 1 };
+      if( ImGui::BeginTable( "MainTable", numColumns, ImGuiTableFlags_Resizable | ImGuiTableFlags_SizingStretchProp ) )
       {
         ImGui::TableNextRow();
 
-        const auto region{ ImGui::GetWindowContentRegionMax() };
+        const auto cRegion{ ImGui::GetWindowContentRegionMax() };
 
         ImGui::TableNextColumn();
-        UpdatePrimaryRow( region.y * 0.7f ); // 70% of available height
+        UpdatePrimaryRow( cRegion.y * 0.7f ); // 70% of available height
 
         ImGui::TableNextRow();
 
@@ -602,8 +612,8 @@ namespace rumDebugInterface
     if( ImGui::BeginTabItem( "Breakpoints##TabItem" ) )
     {
       const ImVec2 vRegion{ ImGui::GetContentRegionAvail() };
-      const float fSizeY{ std::max( 0.0f, vRegion.y - 2.0f ) };
-      ImGui::BeginChild( "BreakpointsTabChild", ImVec2( 0.f, fSizeY ), false, ImGuiWindowFlags_HorizontalScrollbar );
+      const ImVec2 cSize{ 0.0f, std::max( 0.0f, vRegion.y - 2.0f ) };
+      ImGui::BeginChild( "BreakpointsTabChild", cSize, false, ImGuiWindowFlags_HorizontalScrollbar );
 
       // Fetch by copy here because there is potential to modify the list during iteration
       const auto cvBreakpoints{ rumDebugVM::GetBreakpointsCopy() };
@@ -613,9 +623,10 @@ namespace rumDebugInterface
       }
       else
       {
+        constexpr int32_t iNumColumns{ 3 };
         constexpr ImGuiTableFlags eTableFlags{ ImGuiTableFlags_Resizable | ImGuiTableFlags_SizingStretchProp |
                                                ImGuiTableFlags_Borders | ImGuiTableFlags_NoSavedSettings };
-        if( ImGui::BeginTable( "BreakpointsTable", 3, eTableFlags ) )
+        if( ImGui::BeginTable( "BreakpointsTable", iNumColumns, eTableFlags ) )
         {
           rumDebugBreakpoint cRemovedBreakpoint;
           bool bBreakpointRemoved{ false };
@@ -747,16 +758,16 @@ namespace rumDebugInterface
     }
 
     const ImVec2 vRegion{ ImGui::GetContentRegionAvail() };
-    const float fSizeY{ std::max( 0.0f, vRegion.y - 2.0f ) };
-    ImGui::BeginChild( "FileExplorerTabChild", ImVec2( 0.f, fSizeY ), false, ImGuiWindowFlags_HorizontalScrollbar );
+    const ImVec2 cSize{ 0.0f, std::max( 0.0f, vRegion.y - 2.0f ) };
+    ImGui::BeginChild( "FileExplorerTabChild", cSize, false, ImGuiWindowFlags_HorizontalScrollbar );
 
     std::string strFilter( strCFilter );
 
     std::filesystem::path fsPath( g_strScriptPath );
-    std::filesystem::recursive_directory_iterator end, dir( fsPath );
-    while( dir != end )
+    std::filesystem::recursive_directory_iterator cEnd, cDir( fsPath );
+    while( cDir != cEnd )
     {
-      UpdateDisplayFolder( dir->path().generic_string(), dir, end, strFilter );
+      UpdateDisplayFolder( cDir->path().generic_string(), cDir, cEnd, strFilter );
     }
 
     // FileExplorerTabChild
@@ -775,14 +786,15 @@ namespace rumDebugInterface
     if( ImGui::BeginTabItem( "Locals##TabItem" ) )
     {
       const ImVec2 vRegion{ ImGui::GetContentRegionAvail() };
-      const float fSizeY{ std::max( 0.0f, vRegion.y - 2.0f ) };
-      ImGui::BeginChild( "LocalsTabChild", ImVec2( 0.f, fSizeY ), false, ImGuiWindowFlags_HorizontalScrollbar );
+      const ImVec2 cSize{ 0.0f, std::max( 0.0f, vRegion.y - 2.0f ) };
+      ImGui::BeginChild( "LocalsTabChild", cSize, false, ImGuiWindowFlags_HorizontalScrollbar );
 
       if( pcContext->m_bPaused )
       {
+        constexpr int32_t iNumColumns{ 3 };
         constexpr ImGuiTableFlags eTableFlags{ ImGuiTableFlags_Resizable | ImGuiTableFlags_SizingStretchProp |
                                                ImGuiTableFlags_Borders | ImGuiTableFlags_NoSavedSettings };
-        if( ImGui::BeginTable( "LocalsTable", 3, eTableFlags ) )
+        if( ImGui::BeginTable( "LocalsTable", iNumColumns, eTableFlags ) )
         {
           const auto& rcvLocalVariables{ rumDebugVM::GetLocalVariablesRef() };
           for( const auto& iter : rcvLocalVariables )
@@ -796,7 +808,7 @@ namespace rumDebugInterface
       }
       else
       {
-        ImGui::Text( "Running" );
+        ImGui::TextUnformatted( "Running" );
       }
 
       // LocalsTabChild
@@ -857,7 +869,8 @@ namespace rumDebugInterface
     // A table split by a file explorer on the left and source code on the right
     constexpr ImGuiTableFlags eTableFlags{ ImGuiTableFlags_Resizable | ImGuiTableFlags_Borders |
                                            ImGuiTableFlags_ScrollY };
-    if( ImGui::BeginTable( "PrimaryRow", 2, eTableFlags, { 0.f, i_fHeight } ) )
+    constexpr int32_t iNumColumns{ 2 };
+    if( ImGui::BeginTable( "PrimaryRow", iNumColumns, eTableFlags, { 0.0f, i_fHeight } ) )
     {
       ImGui::TableNextRow();
 
@@ -877,7 +890,8 @@ namespace rumDebugInterface
   {
     constexpr ImGuiTableFlags eTableFlags{ ImGuiTableFlags_Resizable | ImGuiTableFlags_Borders |
                                            ImGuiTableFlags_ScrollY };
-    if( ImGui::BeginTable( "SecondaryRow", 2, eTableFlags ) )
+    constexpr int32_t iNumColumns{ 2 };
+    if( ImGui::BeginTable( "SecondaryRow", iNumColumns, eTableFlags ) )
     {
       ImGui::TableNextRow();
 
@@ -924,7 +938,7 @@ namespace rumDebugInterface
   void UpdateSourceCode()
   {
     static ImU32 uiCurrentLineColor{ ImGui::GetColorU32( { 0.2f, 0.4f, 0.7f, 0.5f } ) };
-    static const ImU32 uiFindTextLineColor{ ImGui::GetColorU32( ImVec4( 1.0f, 1.0f, 0.0f, 0.5f ) ) };
+    static const ImU32 uiFindTextLineColor{ ImGui::GetColorU32( { 1.0f, 1.0f, 0.0f, 0.5f } ) };
 
     static char strFindText[MAX_FILENAME_LENGTH];
     static int32_t iFindFileOffset{ 0 };
@@ -1009,8 +1023,8 @@ namespace rumDebugInterface
                                  bSetFocus ? ImGuiTabItemFlags_SetSelected : ImGuiTabItemFlags_None ) )
         {
           const ImVec2 vRegion{ ImGui::GetContentRegionAvail() };
-          const float fSizeY{ std::max( 0.0f, vRegion.y - 2.0f ) };
-          ImGui::BeginChild( "SourceCodeTabChild", { 0.f, fSizeY }, false, ImGuiWindowFlags_HorizontalScrollbar );
+          const ImVec2 cSize{ 0.0f, std::max( 0.0f, vRegion.y - 2.0f ) };
+          ImGui::BeginChild( "SourceCodeTabChild", cSize, false, ImGuiWindowFlags_HorizontalScrollbar );
 
           if( bSetFocus )
           {
@@ -1032,9 +1046,10 @@ namespace rumDebugInterface
           constexpr ImGuiTableFlags eTableFlags{ ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_Resizable |
                                                  ImGuiTableFlags_ScrollX | ImGuiTableFlags_ScrollY |
                                                  ImGuiTableFlags_NoSavedSettings };
-          if( ImGui::BeginTable( "SourceCode", 2, eTableFlags ) )
+          constexpr int32_t iNumColumns{ 2 };
+          if( ImGui::BeginTable( "SourceCode", iNumColumns, eTableFlags ) )
           {
-            ImGui::TableSetupColumn( "Line", ImGuiTableColumnFlags_WidthFixed, ImGui::GetFontSize() * 3.f );
+            ImGui::TableSetupColumn( "Line", ImGuiTableColumnFlags_WidthFixed, ImGui::GetFontSize() * 3.0f );
             ImGui::TableSetupColumn( "Source", ImGuiTableColumnFlags_WidthFixed, ImGui::GetFontSize() * rcFile.m_uiLongestLine );
             ImGui::TableSetupScrollFreeze( 1, 0 );
 
@@ -1055,7 +1070,7 @@ namespace rumDebugInterface
               ImGui::OpenPopup( "Find In File" );
             }
 
-            constexpr ImVec2 buttonSize{ 120, 0 };
+            constexpr ImVec2 cButtonSize{ 120, 0 };
 
             if( ImGui::BeginPopupModal( "Find In File", nullptr, ImGuiWindowFlags_AlwaysAutoResize ) )
             {
@@ -1068,7 +1083,7 @@ namespace rumDebugInterface
 
               ImGui::InputText( "##FindText", strFindText, IM_ARRAYSIZE( strFindText ) );
 
-              if( ImGui::Button( "OK", buttonSize ) ||
+              if( ImGui::Button( "OK", cButtonSize ) ||
                   ( bHasFocus && ( ImGui::IsKeyPressed( ImGuiKey_Enter ) ||
                                    ImGui::IsKeyPressed( ImGuiKey_KeyPadEnter ) ) ) )
               {
@@ -1108,7 +1123,7 @@ namespace rumDebugInterface
 
               ImGui::SameLine();
 
-              if( ImGui::Button( "Cancel", buttonSize ) )
+              if( ImGui::Button( "Cancel", cButtonSize ) )
               {
                 ImGui::CloseCurrentPopup();
               }
@@ -1135,7 +1150,7 @@ namespace rumDebugInterface
 
               ImGui::InputInt( "##GotoLine", &iGotoLine );
 
-              if( ImGui::Button( "OK", buttonSize ) ||
+              if( ImGui::Button( "OK", cButtonSize ) ||
                   ( bHasFocus && ( ImGui::IsKeyPressed( ImGuiKey_Enter ) ||
                                    ImGui::IsKeyPressed( ImGuiKey_KeyPadEnter ) ) ) )
               {
@@ -1155,7 +1170,7 @@ namespace rumDebugInterface
 
               ImGui::SameLine();
 
-              if( ImGui::Button( "Cancel", buttonSize ) )
+              if( ImGui::Button( "Cancel", cButtonSize ) )
               {
                 ImGui::CloseCurrentPopup();
               }
@@ -1173,7 +1188,7 @@ namespace rumDebugInterface
                 ImGui::TableNextRow();
 
                 ImGui::TableNextColumn();
-                ImGui::Text( "" );
+                ImGui::TextUnformatted( "" );
 
                 if( iIndex == g_iFocusLine )
                 {
@@ -1227,15 +1242,17 @@ namespace rumDebugInterface
 
                   if( ImGui::IsMouseHoveringRect( vItemRectMin, vItemRectMax ) )
                   {
+                    constexpr bool bEnabled{ true };
+
                     if( ( bHasFocus && ImGui::IsKeyPressed( ImGuiKey_F9 ) ) ||
                         ImGui::IsMouseDoubleClicked( ImGuiMouseButton_Left ) )
                     {
-                      rumDebugBreakpoint cBreakpoint( rcFile.m_fsFilePath, iLine );
+                      rumDebugBreakpoint cBreakpoint( rcFile.m_fsFilePath, iLine, bEnabled );
                       rumDebugVM::BreakpointToggle( cBreakpoint );
                     }
                     else if( ImGui::IsKeyPressed( ImGuiKey_Delete ) )
                     {
-                      rumDebugBreakpoint cBreakpoint( rcFile.m_fsFilePath, iLine );
+                      rumDebugBreakpoint cBreakpoint( rcFile.m_fsFilePath, iLine, bEnabled );
                       rumDebugVM::BreakpointRemove( cBreakpoint );
                     }
                   }
@@ -1274,14 +1291,16 @@ namespace rumDebugInterface
 
                     if( ImGui::IsMouseHoveringRect( vItemRectMin, vItemRectMax ) )
                     {
+                      constexpr bool bEnabled{ true };
+
                       if( bHasFocus && ImGui::IsKeyPressed( ImGuiKey_F9 ) )
                       {
-                        rumDebugBreakpoint cBreakpoint{ rcFile.m_fsFilePath, static_cast<uint32_t>( iLine ) };
+                        rumDebugBreakpoint cBreakpoint{ rcFile.m_fsFilePath, static_cast<uint32_t>( iLine ), bEnabled };
                         rumDebugVM::BreakpointToggle( cBreakpoint );
                       }
                       else if( bHasFocus && ImGui::IsKeyPressed( ImGuiKey_Delete ) )
                       {
-                        rumDebugBreakpoint cBreakpoint{ rcFile.m_fsFilePath, static_cast<uint32_t>( iLine ) };
+                        rumDebugBreakpoint cBreakpoint{ rcFile.m_fsFilePath, static_cast<uint32_t>( iLine ), bEnabled };
                         rumDebugVM::BreakpointRemove( cBreakpoint );
                       }
                     }
@@ -1318,8 +1337,8 @@ namespace rumDebugInterface
   void UpdateStackBreakpointWindow()
   {
     const ImVec2 vRegion{ ImGui::GetContentRegionAvail() };
-    const float fSizeY{ std::max( 0.0f, vRegion.y - 2.0f ) };
-    ImGui::BeginChild( "StackAndBreakpointsChild", { 0.f, fSizeY }, false, ImGuiWindowFlags_HorizontalScrollbar );
+    const ImVec2 cSize{ 0.0f, std::max( 0.0f, vRegion.y - 2.0f ) };
+    ImGui::BeginChild( "StackAndBreakpointsChild", cSize, false, ImGuiWindowFlags_HorizontalScrollbar );
 
     if( ImGui::BeginTabBar( "StackAndBreakpointsChildTabBar", ImGuiTabBarFlags_None ) )
     {
@@ -1341,8 +1360,9 @@ namespace rumDebugInterface
     if( ImGui::BeginTabItem( "Callstack##TabItem" ) )
     {
       const ImVec2 vRegion{ ImGui::GetContentRegionAvail() };
-      const float fSizeY{ std::max( 0.0f, vRegion.y - 2.0f ) };
-      ImGui::BeginChild( "CallstackTabChild", { 0.f, fSizeY }, false, ImGuiWindowFlags_HorizontalScrollbar );
+      const ImVec2 cSize{ 0.0f, std::max( 0.0f, vRegion.y - 2.0f ) };
+
+      ImGui::BeginChild( "CallstackTabChild", cSize, false, ImGuiWindowFlags_HorizontalScrollbar );
 
       auto pcContext{ rumDebugVM::GetCurrentDebugContext() };
       if( pcContext )
@@ -1355,7 +1375,8 @@ namespace rumDebugInterface
         {
           constexpr ImGuiTableFlags eTableFlags{ ImGuiTableFlags_Resizable | ImGuiTableFlags_SizingStretchProp |
                                                  ImGuiTableFlags_Borders | ImGuiTableFlags_NoSavedSettings };
-          if( ImGui::BeginTable( "CallstackTable", 3, eTableFlags ) )
+          constexpr int32_t iNumColumns{ 3 };
+          if( ImGui::BeginTable( "CallstackTable", iNumColumns, eTableFlags ) )
           {
             uint32_t uiStackIndex{ 0 };
             for( const auto& iterCallstack : pcContext->m_vCallstack )
@@ -1410,8 +1431,8 @@ namespace rumDebugInterface
   void UpdateWatchLocalWindow()
   {
     const ImVec2 vRegion{ ImGui::GetContentRegionAvail() };
-    const float fSizeY{ std::max( 0.0f, vRegion.y - 2.0f ) };
-    ImGui::BeginChild( "WatchAndLocalsChild", { 0.f, fSizeY }, false, ImGuiWindowFlags_HorizontalScrollbar );
+    const ImVec2 cSize{ 0.0f, std::max( 0.0f, vRegion.y - 2.0f ) };
+    ImGui::BeginChild( "WatchAndLocalsChild", cSize, false, ImGuiWindowFlags_HorizontalScrollbar );
 
     //ImGui::BeginGroup();
     if( ImGui::BeginTabBar( "WatchAndLocalsChildTabBar", ImGuiTabBarFlags_None ) )
@@ -1447,13 +1468,14 @@ namespace rumDebugInterface
     if( ImGui::BeginTabItem( "VMs##TabItem" ) )
     {
       const ImVec2 vRegion{ ImGui::GetContentRegionAvail() };
-      const float fSizeY{ std::max( 0.0f, vRegion.y - 2.0f ) };
-      ImGui::BeginChild( "VMsTabChild", { 0.f, fSizeY }, false, ImGuiWindowFlags_HorizontalScrollbar );
+      const ImVec2 cSize{ 0.0f, std::max( 0.0f, vRegion.y - 2.0f ) };
+      ImGui::BeginChild( "VMsTabChild", cSize, false, ImGuiWindowFlags_HorizontalScrollbar );
 
       constexpr ImGuiTableFlags eTableFlags{ ImGuiTableFlags_Resizable | ImGuiTableFlags_Borders |
                                              ImGuiTableFlags_ScrollY | ImGuiTableFlags_ContextMenuInBody |
                                              ImGuiTableFlags_NoSavedSettings };
-      if( ImGui::BeginTable( "VMsTable", 2, eTableFlags ) )
+      constexpr int32_t iNumColumns{ 2 };
+      if( ImGui::BeginTable( "VMsTable", iNumColumns, eTableFlags ) )
       {
         const auto& cDebugContexts{ rumDebugVM::GetDebugContexts() };
         for( const auto& iter : cDebugContexts )
@@ -1507,15 +1529,16 @@ namespace rumDebugInterface
     if( ImGui::BeginTabItem( "Watched##TabItem" ) )
     {
       const ImVec2 vRegion{ ImGui::GetContentRegionAvail() };
-      const float fSizeY{ std::max( 0.0f, vRegion.y - 2.0f ) };
-      ImGui::BeginChild( "WatchedTabChild", { 0.f, fSizeY }, false, ImGuiWindowFlags_HorizontalScrollbar );
+      const ImVec2 cSize{ 0.0f, std::max( 0.0f, vRegion.y - 2.0f ) };
+      ImGui::BeginChild( "WatchedTabChild", cSize, false, ImGuiWindowFlags_HorizontalScrollbar );
 
       if( pcContext->m_bPaused )
       {
         constexpr ImGuiTableFlags eTableFlags{ ImGuiTableFlags_Resizable | ImGuiTableFlags_Borders |
                                                ImGuiTableFlags_ScrollY | ImGuiTableFlags_ContextMenuInBody |
                                                ImGuiTableFlags_NoSavedSettings };
-        if( ImGui::BeginTable( "WatchTable", 3, eTableFlags ) )
+        constexpr int32_t iNumColumns{ 3 };
+        if( ImGui::BeginTable( "WatchTable", iNumColumns, eTableFlags ) )
         {
           static char strCWatchVariable[MAX_FILENAME_LENGTH];
 
@@ -1610,7 +1633,7 @@ namespace rumDebugInterface
       }
       else
       {
-        ImGui::Text( "Running" );
+        ImGui::TextUnformatted( "Running" );
       }
 
       // WatchedTabChild

@@ -142,7 +142,7 @@ namespace rumDebugVM
     }
 
     AttachVM( i_pcVM, strName );
-    
+
     return SQ_OK;
   }
 
