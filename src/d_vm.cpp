@@ -384,10 +384,28 @@ namespace rumDebugVM
         uiLongestLine = { std::max( uiLineLength, uiLongestLine ) };
 
         // Parse multiline comment ranges
-        if( !bInMultilineComment && strLine.find( "/*" ) != std::string::npos )
+        size_t iMultilineCommentStartSymbol{ strLine.find( "/*" ) };
+        if( !bInMultilineComment && iMultilineCommentStartSymbol != std::string::npos )
         {
-          bInMultilineComment = true;
-          iMultilineCommentStart = index;
+          size_t iMultilineCommentEndSymbol{ strLine.find( "*/" ) };
+          while( iMultilineCommentStartSymbol != std::string::npos && iMultilineCommentEndSymbol != std::string::npos )
+          {
+            while( iMultilineCommentEndSymbol != std::string::npos && iMultilineCommentEndSymbol < iMultilineCommentStartSymbol )
+            {
+              // end before start, let's check if we have real closure in this line
+              iMultilineCommentEndSymbol = strLine.find( "*/", iMultilineCommentEndSymbol + 2 );
+            }
+            if( iMultilineCommentEndSymbol != std::string::npos )
+            {
+              // found a closure for multiline comment in same line, let's check that if we try to start a new multi line comment after this block
+              iMultilineCommentStartSymbol = strLine.find( "/*", iMultilineCommentEndSymbol + 2 );
+            }
+          }
+          if( iMultilineCommentStartSymbol != std::string::npos )
+          {
+            bInMultilineComment = true;
+            iMultilineCommentStart = index;
+          }
         }
         else if( bInMultilineComment && strLine.find( "*/" ) != std::string::npos )
         {
