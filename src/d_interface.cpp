@@ -1179,137 +1179,127 @@ namespace rumDebugInterface
               ImGui::EndPopup();
             }
 
-            // We need to adjust the scroll offset, but that can't be done when clipping. Take a frame here to fix the
-            // offset, rendering as little as possible to get the job done.
-            if( bSetFocus && g_iFocusLine >= 0 )
+            // Show the table using a clipper since file sizes can be very large
+            ImGuiListClipper cClipper;
+            cClipper.Begin( (int32_t)iNumLines );
+
+            if( bSetFocus && g_iFocusLine > 0 )
             {
-              for( int32_t iIndex{ 1 }; iIndex <= (int32_t)iNumLines; ++iIndex )
+              cClipper.ForceDisplayRangeByIndices( g_iFocusLine - 1, g_iFocusLine );
+            }
+
+            // Skip the header row
+            while( cClipper.Step() )
+            {
+              for( int32_t iRow{ cClipper.DisplayStart }; iRow < cClipper.DisplayEnd; ++iRow )
               {
+                bool bInMultilineComment{ false };
+                int32_t iLine{ iRow + 1 };
+
+                // Determine if this line is inside of a multiline comment
+                for( const auto& commentIter : rcFile.m_vMultilineComments )
+                {
+                  if( iLine > commentIter.m_iStartLine && iLine < commentIter.m_iEndLine )
+                  {
+                    bInMultilineComment = true;
+                    break;
+                  }
+                }
+
                 ImGui::TableNextRow();
 
+                // The line number column
                 ImGui::TableNextColumn();
-                ImGui::TextUnformatted( "" );
 
-                if( iIndex == g_iFocusLine )
+                const auto& iter{ vLinesWithBreakpoints.find( iLine ) };
+                if( iter != vLinesWithBreakpoints.end() )
                 {
-                  ImGui::SetScrollHereY();
-                  g_iFocusLine = -1;
+                  ImGui::TableSetBgColor( ImGuiTableBgTarget_CellBg,
+                                          iter->second ? g_uiEnabledBreakpointColor : g_uiDisabledBreakpointColor );
                 }
-              }
-            }
-            else
-            {
-              // Show the table using a clipper since file sizes can be very large
-              ImGuiListClipper clipper;
-              clipper.Begin( (int32_t)iNumLines );
 
-              // Skip the header row
-              while( clipper.Step() )
-              {
-                for( int32_t iRow{ clipper.DisplayStart }; iRow < clipper.DisplayEnd; ++iRow )
+                ImGui::Text( "%d", iLine );
+
+                // Calculate the column bounds that can take mouse-clicks
+                auto vItemRectMin{ ImGui::GetItemRectMin() };
+                auto vItemRectMax{ ImGui::GetItemRectMax() };
+                vItemRectMax.x += ImGui::GetColumnWidth();
+
+                if( ImGui::IsMouseHoveringRect( vItemRectMin, vItemRectMax ) )
                 {
-                  bool bInMultilineComment{ false };
-                  int32_t iLine{ iRow + 1 };
+                  constexpr bool bEnabled{ true };
 
-                  // Determine if this line is inside of a multiline comment
-                  for( const auto& commentIter : rcFile.m_vMultilineComments )
+                  if( ( bHasFocus && ImGui::IsKeyPressed( ImGuiKey_F9 ) ) ||
+                      ImGui::IsMouseDoubleClicked( ImGuiMouseButton_Left ) )
                   {
-                    if( iLine > commentIter.m_iStartLine && iLine < commentIter.m_iEndLine )
-                    {
-                      bInMultilineComment = true;
-                      break;
-                    }
+                    rumDebugBreakpoint cBreakpoint( rcFile.m_fsFilePath, iLine, bEnabled );
+                    rumDebugVM::BreakpointToggle( cBreakpoint );
+                  }
+                  else if( ImGui::IsKeyPressed( ImGuiKey_Delete ) )
+                  {
+                    rumDebugBreakpoint cBreakpoint( rcFile.m_fsFilePath, iLine, bEnabled );
+                    rumDebugVM::BreakpointRemove( cBreakpoint );
+                  }
+                }
+
+                // The source code column
+                ImGui::TableNextColumn();
+
+                if( ( iRow + 1 ) < static_cast<int32_t>( rcFile.m_vStringOffsets.size() ) )
+                {
+                  size_t iBegin{ rcFile.m_vStringOffsets[iRow] };
+                  size_t iEnd{ rcFile.m_vStringOffsets[iRow + 1] - 1 };
+                  std::string strLine{ rcFile.m_strData.substr( iBegin, iEnd - iBegin ) };
+
+                  const auto pcContext{ rumDebugVM::GetCurrentDebugContext() };
+                  if( pcContext && pcContext->m_bPaused &&
+                      ( pcContext->m_uiPausedLine == static_cast<uint32_t>( iLine ) ) &&
+                      ( pcContext->m_fsPausedFile.compare( rcFile.m_fsFilePath ) == 0 ) )
+                  {
+                    ImGui::TableSetBgColor( ImGuiTableBgTarget_CellBg, uiCurrentLineColor );
                   }
 
-                  ImGui::TableNextRow();
-
-                  // The line number column
-                  ImGui::TableNextColumn();
-
-                  const auto& iter{ vLinesWithBreakpoints.find( iLine ) };
-                  if( iter != vLinesWithBreakpoints.end() )
+                  if( strFindText[0] != '\0' && ( iLine == iFindLineOffset ) )
                   {
-                    ImGui::TableSetBgColor( ImGuiTableBgTarget_CellBg,
-                                            iter->second ? g_uiEnabledBreakpointColor : g_uiDisabledBreakpointColor );
+                    // Highlight the line containing the string typed in the find dialog
+                    ImGui::TableSetBgColor( ImGuiTableBgTarget_CellBg, uiFindTextLineColor );
                   }
 
-                  ImGui::Text( "%d", iLine );
+                  ImGui::BeginGroup();
+                  DisplayCode( strLine, iLine, bInMultilineComment );
+                  ImGui::EndGroup();
 
                   // Calculate the column bounds that can take mouse-clicks
-                  auto vItemRectMin{ ImGui::GetItemRectMin() };
-                  auto vItemRectMax{ ImGui::GetItemRectMax() };
+                  vItemRectMin = ImGui::GetItemRectMin();
+                  vItemRectMax = ImGui::GetItemRectMax();
                   vItemRectMax.x += ImGui::GetColumnWidth();
 
                   if( ImGui::IsMouseHoveringRect( vItemRectMin, vItemRectMax ) )
                   {
                     constexpr bool bEnabled{ true };
 
-                    if( ( bHasFocus && ImGui::IsKeyPressed( ImGuiKey_F9 ) ) ||
-                        ImGui::IsMouseDoubleClicked( ImGuiMouseButton_Left ) )
+                    if( bHasFocus && ImGui::IsKeyPressed( ImGuiKey_F9 ) )
                     {
-                      rumDebugBreakpoint cBreakpoint( rcFile.m_fsFilePath, iLine, bEnabled );
+                      rumDebugBreakpoint cBreakpoint{ rcFile.m_fsFilePath, static_cast<uint32_t>( iLine ), bEnabled };
                       rumDebugVM::BreakpointToggle( cBreakpoint );
                     }
-                    else if( ImGui::IsKeyPressed( ImGuiKey_Delete ) )
+                    else if( bHasFocus && ImGui::IsKeyPressed( ImGuiKey_Delete ) )
                     {
-                      rumDebugBreakpoint cBreakpoint( rcFile.m_fsFilePath, iLine, bEnabled );
+                      rumDebugBreakpoint cBreakpoint{ rcFile.m_fsFilePath, static_cast<uint32_t>( iLine ), bEnabled };
                       rumDebugVM::BreakpointRemove( cBreakpoint );
                     }
                   }
 
-                  // The source code column
-                  ImGui::TableNextColumn();
-
-                  if( ( iRow + 1 ) < static_cast<int32_t>( rcFile.m_vStringOffsets.size() ) )
+                  if( bSetFocus && g_iFocusLine == iLine )
                   {
-                    size_t iBegin{ rcFile.m_vStringOffsets[iRow] };
-                    size_t iEnd{ rcFile.m_vStringOffsets[iRow + 1] - 1 };
-                    std::string strLine{ rcFile.m_strData.substr( iBegin, iEnd - iBegin ) };
-
-                    const auto pcContext{ rumDebugVM::GetCurrentDebugContext() };
-                    if( pcContext && pcContext->m_bPaused &&
-                        ( pcContext->m_uiPausedLine == static_cast<uint32_t>( iLine ) ) &&
-                        ( pcContext->m_fsPausedFile.compare( rcFile.m_fsFilePath ) == 0 ) )
-                    {
-                      ImGui::TableSetBgColor( ImGuiTableBgTarget_CellBg, uiCurrentLineColor );
-                    }
-
-                    if( strFindText[0] != '\0' && ( iLine == iFindLineOffset ) )
-                    {
-                      // Highlight the line containing the string typed in the find dialog
-                      ImGui::TableSetBgColor( ImGuiTableBgTarget_CellBg, uiFindTextLineColor );
-                    }
-
-                    ImGui::BeginGroup();
-                    DisplayCode( strLine, iLine, bInMultilineComment );
-                    ImGui::EndGroup();
-
-                    // Calculate the column bounds that can take mouse-clicks
-                    vItemRectMin = ImGui::GetItemRectMin();
-                    vItemRectMax = ImGui::GetItemRectMax();
-                    vItemRectMax.x += ImGui::GetColumnWidth();
-
-                    if( ImGui::IsMouseHoveringRect( vItemRectMin, vItemRectMax ) )
-                    {
-                      constexpr bool bEnabled{ true };
-
-                      if( bHasFocus && ImGui::IsKeyPressed( ImGuiKey_F9 ) )
-                      {
-                        rumDebugBreakpoint cBreakpoint{ rcFile.m_fsFilePath, static_cast<uint32_t>( iLine ), bEnabled };
-                        rumDebugVM::BreakpointToggle( cBreakpoint );
-                      }
-                      else if( bHasFocus && ImGui::IsKeyPressed( ImGuiKey_Delete ) )
-                      {
-                        rumDebugBreakpoint cBreakpoint{ rcFile.m_fsFilePath, static_cast<uint32_t>( iLine ), bEnabled };
-                        rumDebugVM::BreakpointRemove( cBreakpoint );
-                      }
-                    }
+                    g_iFocusLine = -1;
+                    ImGui::SetScrollHereY();
                   }
                 }
               }
-
-              clipper.End();
             }
+
+            cClipper.End();
 
             // SourceCode
             ImGui::EndTable();
@@ -1439,13 +1429,6 @@ namespace rumDebugInterface
     {
       UpdateWatchTab();
       UpdateLocalsTab();
-
-      // #TODO - without this, the Show Hex checkbox shows up in the wrong place
-      if( ImGui::BeginTabItem( "+##StubItem" ) )
-      {
-        // StubItem
-        ImGui::EndTabItem();
-      }
 
       // WatchAndLocalsChildTabBar
       ImGui::EndTabBar();
